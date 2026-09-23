@@ -1,0 +1,1291 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e2233">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="description" content="Sammon etsintä — a Finnish Afrikan tähti. Race across Finland to find the Sampo.">
+<title>Sammon etsintä</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+:root {
+  --bg: #0e2233;
+  --panel: #16324a;
+  --panel-2: #1e4260;
+  --ink: #f3efe4;
+  --muted: #a9bccb;
+  --accent: #f2c14e;
+  --accent-ink: #2a1d00;
+  --danger: #e0645a;
+  --sea: #7fb0d3;
+  --land: #e9e2c9;
+  --land-edge: #b9ad86;
+  --road: #8b6b4a;
+  --label: #2c2418;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font: 15px/1.35 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+button {
+  font: inherit; color: inherit; cursor: pointer;
+  border: 0; border-radius: 10px; padding: 10px 14px;
+  background: var(--panel-2);
+  touch-action: manipulation;
+}
+button:disabled { opacity: .4; cursor: default; }
+button.primary { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+button.ghost { background: transparent; border: 1px solid #ffffff33; }
+button.icon { padding: 6px 10px; font-size: 18px; background: transparent; }
+.hidden { display: none !important; }
+
+/* ---------- Game layout ---------- */
+#game { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+header {
+  display: flex; align-items: center; gap: 4px;
+  padding: calc(env(safe-area-inset-top) + 4px) 8px 4px 12px;
+  background: var(--panel);
+}
+header h1 { font-size: 17px; margin: 0; flex: 1; letter-spacing: .3px; }
+header h1 small { color: var(--muted); font-weight: 400; font-size: 12px; }
+#players { display: flex; gap: 6px; overflow-x: auto; padding: 6px 8px; background: var(--panel); border-bottom: 1px solid #ffffff14; }
+.pchip {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 6px;
+  padding: 4px 9px 4px 6px; border-radius: 999px; background: #ffffff0d;
+  font-size: 13px; white-space: nowrap; border: 2px solid transparent;
+}
+.pchip.current { border-color: var(--accent); background: #f2c14e22; }
+.pchip .dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #fff; }
+.pchip .money { color: var(--accent); font-variant-numeric: tabular-nums; }
+#mapwrap { flex: 1; overflow: auto; background: var(--sea); position: relative; }
+#map { display: block; width: 100%; height: auto; }
+#mapwrap.zoom #map { width: 190%; }
+
+#panel {
+  background: var(--panel); padding: 10px 12px calc(env(safe-area-inset-bottom) + 10px);
+  border-top: 1px solid #ffffff14;
+}
+#turnline { display: flex; align-items: center; gap: 10px; }
+#turnline .who { font-weight: 700; font-size: 16px; }
+#turnline .who .dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 6px; border: 2px solid #fff; vertical-align: -1px; }
+#status { color: var(--muted); font-size: 13.5px; margin: 2px 0 8px; min-height: 18px; }
+#actions { display: flex; flex-wrap: wrap; gap: 8px; }
+#actions button { flex: 1 1 calc(50% - 8px); min-height: 44px; }
+#actions button.wide { flex-basis: 100%; }
+#actions button small { display: block; font-size: 11.5px; font-weight: 400; opacity: .8; }
+#loglines { margin-top: 8px; font-size: 12.5px; color: var(--muted); cursor: pointer; }
+#loglines div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#loglines b { color: var(--ink); font-weight: 600; }
+
+/* Die */
+.die {
+  width: 44px; height: 44px; border-radius: 9px; background: #fff; margin-left: auto;
+  display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr); padding: 6px;
+  box-shadow: 0 2px 0 #0004 inset, 0 2px 6px #0006; flex: 0 0 auto;
+}
+.die i { width: 8px; height: 8px; border-radius: 50%; background: transparent; place-self: center; }
+.die i.on { background: #1b1b1b; }
+.die.blank i { background: transparent !important; }
+.die.rolling { animation: shake .12s linear infinite; }
+@keyframes shake { 0% { transform: rotate(-8deg); } 50% { transform: rotate(8deg); } 100% { transform: rotate(-8deg); } }
+
+/* Map pieces */
+.lbl { font-size: 9.5px; font-weight: 600; fill: var(--label); paint-order: stroke; stroke: var(--land); stroke-width: 2.6px; stroke-linejoin: round; pointer-events: none; }
+.lbl.finish { font-size: 11px; font-weight: 800; }
+.lbl.sea { stroke: var(--sea); }
+.target-ring { fill: #f2c14e55; stroke: #c98a00; stroke-width: 2; animation: pulse 1s ease-in-out infinite; transform-box: fill-box; transform-origin: center; pointer-events: none; }
+@keyframes pulse { 50% { transform: scale(1.3); opacity: .6; } }
+.hit { fill: transparent; cursor: pointer; }
+.pawn { transition: transform .17s ease-in-out; pointer-events: none; }
+.pawn.active circle { stroke: var(--accent); stroke-width: 2.4; }
+
+/* ---------- Overlays ---------- */
+.overlay {
+  position: fixed; inset: 0; background: #06121cdd; display: flex;
+  align-items: center; justify-content: center; padding: 16px; z-index: 10;
+}
+.card {
+  background: var(--panel); border-radius: 16px; padding: 18px; width: 100%; max-width: 420px;
+  max-height: 100%; overflow: auto; box-shadow: 0 10px 40px #0008;
+}
+.card h2 { margin: 0 0 8px; font-size: 20px; }
+.card p { margin: 6px 0; }
+.reveal { text-align: center; }
+.reveal .big { font-size: 64px; line-height: 1.1; margin: 6px 0; }
+.reveal .big svg { width: 70px; height: 70px; }
+.reveal .effect { font-size: 18px; font-weight: 700; color: var(--accent); }
+.reveal .bad { color: var(--danger); }
+.reveal button { width: 100%; margin-top: 12px; }
+.rules h3 { margin: 14px 0 4px; font-size: 15px; color: var(--accent); }
+.rules table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.rules td { padding: 4px 4px; border-bottom: 1px solid #ffffff14; vertical-align: top; }
+.rules td:first-child { white-space: nowrap; font-weight: 600; }
+.rules ul { padding-left: 18px; margin: 4px 0; font-size: 13.5px; }
+.log-list { font-size: 13px; }
+.log-list div { padding: 4px 0; border-bottom: 1px solid #ffffff10; }
+.close-row { display: flex; justify-content: flex-end; margin-top: 12px; }
+
+/* ---------- Setup ---------- */
+#setup { min-height: 100%; padding: calc(env(safe-area-inset-top) + 16px) 16px 24px; max-width: 520px; margin: 0 auto; }
+#setup h1 { margin: 8px 0 0; font-size: 30px; }
+#setup .tag { color: var(--muted); margin: 2px 0 18px; }
+.field-label { font-size: 13px; color: var(--muted); margin: 14px 0 6px; }
+.stepper { display: flex; align-items: center; gap: 12px; }
+.stepper button { width: 44px; height: 44px; font-size: 22px; padding: 0; }
+.stepper output { font-size: 22px; font-weight: 700; min-width: 20px; text-align: center; }
+.prow { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; background: #ffffff0a; padding: 8px; border-radius: 12px; }
+.prow input {
+  flex: 1; min-width: 0; font: inherit; color: var(--ink); background: #0006;
+  border: 1px solid #ffffff22; border-radius: 8px; padding: 9px 10px;
+}
+.swatch { width: 36px; height: 36px; border-radius: 50%; border: 3px solid #fff; padding: 0; flex: 0 0 auto; }
+.startsel { display: flex; border-radius: 8px; overflow: hidden; flex: 0 0 auto; }
+.startsel button { border-radius: 0; padding: 9px 8px; font-size: 12.5px; background: #0005; }
+.startsel button.on { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+select {
+  font: inherit; color: var(--ink); background: #0006; border: 1px solid #ffffff22;
+  border-radius: 8px; padding: 9px 10px; width: 100%;
+}
+#setup .go { width: 100%; margin-top: 20px; min-height: 52px; font-size: 17px; }
+#setup .resume { width: 100%; margin-top: 10px; }
+.win { text-align: center; }
+.win .big { font-size: 72px; }
+</style>
+</head>
+<body>
+
+<!-- Setup screen -->
+<section id="setup" class="hidden">
+  <h1>Sammon etsintä</h1>
+  <p class="tag">Race across Finland, find the Sampo, carry it home to Helsinki or Rovaniemi.</p>
+
+  <div class="field-label">Players</div>
+  <div class="stepper">
+    <button id="pminus" aria-label="Fewer players">−</button>
+    <output id="pcount">2</output>
+    <button id="pplus" aria-label="More players">+</button>
+  </div>
+
+  <div class="field-label">Names, colours and starting city</div>
+  <div id="prows"></div>
+
+  <div class="field-label">Starting player</div>
+  <select id="firstsel"></select>
+
+  <button class="primary go" id="startbtn">Start the hunt</button>
+  <button class="ghost resume hidden" id="backbtn">Back to current game</button>
+  <button class="ghost resume" id="rulesbtn2">Rules</button>
+</section>
+
+<!-- Game screen -->
+<section id="game" class="hidden">
+  <header>
+    <h1>Sammon etsintä <small id="turnno"></small></h1>
+    <button class="icon" id="zoombtn" aria-label="Zoom map" title="Zoom">🔍</button>
+    <button class="icon" id="rulesbtn" aria-label="Rules" title="Rules">📜</button>
+    <button class="icon" id="menubtn" aria-label="New game" title="New game">⟲</button>
+  </header>
+  <div id="players"></div>
+  <div id="mapwrap"><svg id="map" viewBox="0 0 400 760" xmlns="http://www.w3.org/2000/svg" aria-label="Map of Finland"></svg></div>
+  <div id="panel">
+    <div id="turnline"><div class="who" id="who"></div><div class="die blank" id="die"></div></div>
+    <div id="status"></div>
+    <div id="actions"></div>
+    <div id="loglines" title="Show full log"></div>
+  </div>
+</section>
+
+<div id="overlay" class="overlay hidden"><div class="card" id="card"></div></div>
+
+<script>
+'use strict';
+
+/* =====================================================================
+   Board data
+   Coordinates are lon/lat projected onto a 400×760 board.
+   ===================================================================== */
+const P = (lon, lat) => [Math.round(14 + (lon - 19.5) * 31), Math.round(20 + (70.1 - lat) * 70)];
+
+// id, name, lon, lat, flags. lab = label side (r default, l, t, b).
+const CITY_DEFS = [
+  ['hel', 'Helsinki',     24.94, 60.17, { finish: 1, harbour: 1, station: 1, lab: 'b' }],
+  ['tku', 'Turku',        22.27, 60.45, { harbour: 1, station: 1, lab: 'b' }],
+  ['mhm', 'Mariehamn',    19.94, 60.10, { harbour: 1, island: 1, lab: 'b' }],
+  ['tre', 'Tampere',      23.76, 61.50, { station: 1 }],
+  ['por', 'Pori',         21.80, 61.48, { harbour: 1, lab: 'l' }],
+  ['vaa', 'Vaasa',        21.62, 63.10, { harbour: 1, station: 1, lab: 'l' }],
+  ['sei', 'Seinäjoki',    22.84, 62.79, {}],
+  ['kok', 'Kokkola',      23.13, 63.84, {}],
+  ['jkl', 'Jyväskylä',    25.75, 62.24, { harbour: 1 }],
+  ['lah', 'Lahti',        25.66, 60.98, { harbour: 1, lab: 'l' }],
+  ['kou', 'Kouvola',      26.70, 60.87, { station: 1, lab: 'b' }],
+  ['lpr', 'Lappeenranta', 28.19, 61.06, { harbour: 1, lab: 'b' }],
+  ['svl', 'Savonlinna',   28.88, 61.87, { harbour: 1 }],
+  ['mik', 'Mikkeli',      27.27, 61.69, { harbour: 1, lab: 'l' }],
+  ['kuo', 'Kuopio',       27.68, 62.89, { harbour: 1, station: 1, lab: 'l' }],
+  ['joe', 'Joensuu',      29.76, 62.60, { harbour: 1, station: 1, lab: 't' }],
+  ['kaj', 'Kajaani',      27.73, 64.22, { station: 1 }],
+  ['oul', 'Oulu',         25.60, 65.01, { harbour: 1, station: 1 }],
+  ['hai', 'Hailuoto',     24.40, 65.02, { harbour: 1, island: 1, lab: 'l' }],
+  ['kem', 'Kemi',         24.56, 65.74, { harbour: 1, lab: 'l' }],
+  ['rov', 'Rovaniemi',    25.73, 66.50, { finish: 1, station: 1 }],
+  ['kuu', 'Kuusamo',      29.18, 65.96, {}],
+  ['sod', 'Sodankylä',    26.59, 67.42, { swamp: 1, lab: 'l' }],
+  ['ina', 'Inari',        27.03, 68.91, { goldfield: 1, lab: 'l' }],
+  ['uts', 'Utsjoki',      27.03, 69.83, {}],
+  ['kil', 'Kilpisjärvi',  20.79, 69.05, { lab: 'b' }],
+  ['kor', 'Korvatunturi', 28.90, 67.95, { korva: 1, notoken: 1, lab: 'b' }],
+];
+
+// Road links: [a, b, intermediate steps, { sp: { stepIndex: special }, via: [lon, lat] }]
+const ROAD_DEFS = [
+  ['hel', 'tku', 2], ['hel', 'lah', 1], ['hel', 'tre', 3],
+  ['tku', 'por', 2], ['tku', 'tre', 2], ['por', 'tre', 1], ['por', 'vaa', 3],
+  ['tre', 'sei', 2], ['vaa', 'sei', 1], ['tre', 'jkl', 2, { sp: { 0: 'sauna' } }],
+  ['sei', 'jkl', 2], ['vaa', 'kok', 2], ['sei', 'kok', 2],
+  ['kok', 'oul', 3, { sp: { 1: 'sauna' } }],
+  ['lah', 'jkl', 2], ['lah', 'kou', 0], ['kou', 'lpr', 1], ['kou', 'mik', 1],
+  ['lpr', 'svl', 1], ['mik', 'svl', 1], ['mik', 'kuo', 2, { sp: { 1: 'sauna' } }],
+  ['jkl', 'kuo', 2], ['svl', 'joe', 1], ['kuo', 'joe', 1], ['kuo', 'kaj', 2],
+  ['joe', 'kaj', 3], ['kaj', 'oul', 2], ['kaj', 'kuu', 3, { sp: { 1: 'reindeer' } }],
+  ['oul', 'kem', 1], ['kem', 'rov', 1],
+  ['rov', 'kuu', 3, { sp: { 1: 'reindeer' } }],
+  ['rov', 'sod', 2, { sp: { 0: 'sun' } }],
+  ['sod', 'kor', 2, { sp: { 0: 'reindeer' } }],
+  ['sod', 'ina', 3, { sp: { 1: 'blizzard' } }],
+  ['ina', 'uts', 2, { sp: { 0: 'sun' } }],
+  ['rov', 'kil', 7, { via: [23.3, 68.0], sp: { 1: 'reindeer', 3: 'blizzard', 5: 'sun' } }],
+];
+
+// Ferry routes (sea and lake): [a, b, intermediate steps, { via, sp }]
+const SEA_DEFS = [
+  ['hel', 'tku', 3, { via: [23.4, 59.7] }],
+  ['tku', 'mhm', 3, { via: [21.0, 60.0], sp: { 1: 'storm' } }],
+  ['mhm', 'por', 3, { via: [20.5, 61.1], sp: { 1: 'storm' } }],
+  ['por', 'vaa', 3, { via: [20.7, 62.3] }],
+  ['vaa', 'hai', 4, { via: [22.6, 64.3] }],
+  ['hai', 'oul', 0],
+  ['hai', 'kem', 1, { via: [24.2, 65.4] }],
+  // Päijänne
+  ['lah', 'jkl', 2, { via: [25.45, 61.6], lake: 1 }],
+  // Saimaa
+  ['lpr', 'svl', 1, { via: [28.4, 61.4], lake: 1 }],
+  ['mik', 'svl', 1, { via: [28.0, 61.85], lake: 1 }],
+  ['svl', 'joe', 1, { via: [29.3, 62.25], lake: 1 }],
+  ['svl', 'kuo', 2, { via: [28.3, 62.45], lake: 1 }],
+];
+
+const RAIL_DEFS = [
+  ['hel', 'tku'], ['hel', 'tre'], ['hel', 'kou'], ['kou', 'kuo'], ['kou', 'joe'],
+  ['tre', 'vaa'], ['tre', 'oul'], ['kuo', 'kaj'], ['kaj', 'oul'], ['oul', 'rov'],
+];
+
+const SPECIALS = {
+  blizzard: { icon: '❄️', name: 'Lapland blizzard' },
+  sun:      { icon: '☀️', name: 'Midnight sun' },
+  reindeer: { icon: '🦌', name: 'Reindeer crossing' },
+  sauna:    { icon: '♨️', name: 'Sauna' },
+  storm:    { icon: '🌊', name: 'Baltic storm' },
+};
+
+const CLOUDBERRY_SVG = '<svg viewBox="0 0 40 40" aria-hidden="true"><path d="M20 6 L14 12 L20 11 L26 12 Z M20 11 L12 10 M20 11 L28 10" fill="#3f8a3a" stroke="#3f8a3a" stroke-width="2" stroke-linejoin="round"/>' +
+  [[20, 16], [14, 20], [26, 20], [20, 22], [15, 27], [25, 27], [20, 30], [11, 25], [29, 25]]
+    .map(([x, y]) => `<circle cx="${x}" cy="${y}" r="5" fill="#f19a2e" stroke="#c96c10" stroke-width="1"/>`).join('') + '</svg>';
+
+const TOKENS = {
+  gold:     { n: 3, name: 'Lemmenjoki gold', icon: '🪙', value: 1000 },
+  silver:   { n: 4, name: 'Silver',          icon: '🥈', value: 600 },
+  berries:  { n: 5, name: 'Cloudberries',    icon: CLOUDBERRY_SVG, value: 300 },
+  empty:    { n: 6, name: 'Empty',           icon: '🍂' },
+  louhi:    { n: 2, name: 'Louhi',           icon: '🧙‍♀️' },
+  hiisi:    { n: 1, name: 'Hiisi',           icon: '👹' },
+  fragment: { n: 2, name: 'Sampo fragment',  icon: '🧩' },
+  sampo:    { n: 1, name: 'The Sampo',       icon: '🌟' },
+};
+
+const COLORS = ['#d8433b', '#2f6fd6', '#2e9e57', '#e8b923', '#8e4fc9', '#ee7b22', '#18a6a6', '#e35d9f'];
+const COSTS = { flip: 100, ferry: 100, train: 300, snow: 200 };
+const START_MONEY = 300;
+const SAVE_KEY = 'sammon-etsinta:v1';
+
+/* ---------- Build the graph ---------- */
+const NODES = {};      // id -> { id, kind: city|step|sea, x, y, ... }
+const ROAD = {};       // id -> [neighbour ids]
+const SEA_ROUTES = []; // [ [a, ...seaSteps, b], ... ] with .lake flag
+const RAIL = {};       // id -> [station ids]
+
+function addNode(n) { n.lap = n.y <= 290; NODES[n.id] = n; ROAD[n.id] = ROAD[n.id] || []; RAIL[n.id] = RAIL[n.id] || []; }
+function linkRoad(a, b) { ROAD[a].push(b); ROAD[b].push(a); }
+function curvePoint(a, b, via, t) {
+  if (!via) return [a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t];
+  const [vx, vy] = P(via[0], via[1]), u = 1 - t;
+  return [u * u * a.x + 2 * u * t * vx + t * t * b.x, u * u * a.y + 2 * u * t * vy + t * t * b.y];
+}
+
+for (const [id, name, lon, lat, f] of CITY_DEFS) {
+  const [x, y] = P(lon, lat);
+  addNode({ id, kind: 'city', name, x, y, ...f });
+}
+for (const [a, b, n, opt = {}] of ROAD_DEFS) {
+  let prev = a;
+  for (let i = 0; i < n; i++) {
+    const [x, y] = curvePoint(NODES[a], NODES[b], opt.via, (i + 1) / (n + 1));
+    const id = `${a}-${b}-${i}`;
+    addNode({ id, kind: 'step', x, y, special: opt.sp && opt.sp[i] });
+    linkRoad(prev, id); prev = id;
+  }
+  linkRoad(prev, b);
+}
+for (const [a, b, n, opt = {}] of SEA_DEFS) {
+  const route = [a];
+  for (let i = 0; i < n; i++) {
+    const [x, y] = curvePoint(NODES[a], NODES[b], opt.via, (i + 1) / (n + 1));
+    const id = `sea-${a}-${b}-${i}`;
+    addNode({ id, kind: 'sea', x, y, special: opt.sp && opt.sp[i], lake: !!opt.lake });
+    route.push(id);
+  }
+  route.push(b);
+  route.lake = !!opt.lake;
+  route.via = opt.via;
+  SEA_ROUTES.push(route);
+}
+for (const [a, b] of RAIL_DEFS) { RAIL[a].push(b); RAIL[b].push(a); }
+
+const TOKEN_CITIES = CITY_DEFS.filter(c => !c[4].finish && !c[4].notoken).map(c => c[0]);
+const isFinish = id => !!NODES[id].finish;
+
+/* =====================================================================
+   State
+   ===================================================================== */
+let S = null;          // saved game state
+let busy = false;      // animation in progress (not saved)
+let zoomed = false;
+let hideWin = false;   // winner card dismissed to look at the board
+const FAST = /[?&]fast\b/.test(location.search);   // test hook: skip animations
+
+function save() {
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch (e) { /* storage unavailable */ }
+}
+function loadSaved() {
+  try { const raw = localStorage.getItem(SAVE_KEY); return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
+}
+
+function shuffle(a) {
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
+const d6 = () => 1 + Math.floor(Math.random() * 6);
+const euro = n => '€' + n.toLocaleString('en-US');
+const cur = () => S.players[S.current];
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+function newGame(setup) {
+  hideWin = false;
+  const pool = [];
+  for (const [type, t] of Object.entries(TOKENS)) for (let i = 0; i < t.n; i++) pool.push(type);
+  shuffle(pool);
+  const tokens = {};
+  TOKEN_CITIES.forEach((id, i) => { tokens[id] = { type: pool[i] || 'empty', revealed: false }; });
+
+  S = {
+    v: 1,
+    players: setup.players.map(p => ({
+      name: p.name, color: p.color, node: p.start, money: START_MONEY,
+      sampo: false, fragments: 0, skip: 0, skipReason: '', stuck: null,
+      voyage: null, freeFlip: false,
+    })),
+    tokens,
+    sampoFound: false,
+    korvaClaimed: false,
+    current: setup.first,
+    turn: 1,
+    phase: 'start',
+    roll: null,
+    mode: null,
+    targets: null,
+    reveal: null,
+    winner: null,
+    log: [],
+  };
+  log(`The hunt begins! ${cur().name} goes first.`);
+  startTurn(true);
+}
+
+function log(text, who = S.current) {
+  const p = who == null ? null : S.players[who];
+  S.log.push({ text, c: p ? p.color : null });
+  if (S.log.length > 300) S.log.shift();
+}
+
+/* =====================================================================
+   Rules engine
+   ===================================================================== */
+
+// All ways to walk exactly `d` steps (no doubling back), plus any city passed
+// on the way (you may stop short at a city). Reindeer crossings end the move.
+function reachable(start, d, lapOnly) {
+  const out = {}, dead = [];
+  const visited = new Set([start]);
+  (function dfs(id, path) {
+    const depth = path.length - 1;
+    if (depth > 0) {
+      const n = NODES[id];
+      const halt = depth === d || n.special === 'reindeer';
+      if ((halt || n.kind === 'city') && !out[id]) out[id] = path.slice();
+      if (halt) return;
+    }
+    let moved = false;
+    for (const nb of ROAD[id]) {
+      if (visited.has(nb) || (lapOnly && !NODES[nb].lap)) continue;
+      moved = true;
+      visited.add(nb); path.push(nb);
+      dfs(nb, path);
+      path.pop(); visited.delete(nb);
+    }
+    if (!moved && depth > 0) dead.push(path.slice());
+  })(start, [start]);
+  if (!Object.keys(out).length) for (const p of dead) out[p[p.length - 1]] = p;
+  return out;
+}
+
+const hiddenTokenAt = id => S.tokens[id] && !S.tokens[id].revealed;
+const canWin = p => p.sampo || (S.sampoFound && p.fragments > 0);
+const ferryRoutesFrom = id => SEA_ROUTES.filter(r => r[0] === id || r[r.length - 1] === id)
+  .map(r => r[0] === id ? r.slice() : r.slice().reverse());
+const nodeName = id => NODES[id].name || (NODES[id].special ? SPECIALS[NODES[id].special].name : (NODES[id].kind === 'sea' ? 'open water' : 'the road'));
+
+function startTurn(first) {
+  S.phase = cur().skip > 0 ? 'skip' : 'start';
+  S.roll = null; S.mode = null; S.targets = null; S.reveal = null;
+  save();
+  render();
+  scrollToPawn(first ? 'auto' : 'smooth');
+}
+
+function endTurn() {
+  if (S.phase === 'won') return;
+  S.current = (S.current + 1) % S.players.length;
+  if (S.current === 0) S.turn++;
+  startTurn();
+}
+
+function rollDie(cb) {
+  busy = true;
+  render();
+  const die = document.getElementById('die');
+  die.classList.remove('blank');
+  die.classList.add('rolling');
+  let n = 0;
+  const iv = setInterval(() => { drawDie(d6()); if (++n > 7 || FAST) done(); }, FAST ? 0 : 60);
+  function done() {
+    clearInterval(iv);
+    const v = d6();
+    die.classList.remove('rolling');
+    drawDie(v);
+    busy = false;
+    S.lastRoll = v;
+    cb(v);
+  }
+}
+
+// --- Actions -----------------------------------------------------------
+
+function actWalk(mode) {
+  const p = cur();
+  const lap = mode === 'snow';
+  if (lap) { p.money -= COSTS.snow; }
+  rollDie(v => {
+    const d = lap ? v * 2 : v;
+    log(lap ? `${p.name} fires up a snowmobile (−${euro(COSTS.snow)}) and rolls ${v} → ${d} steps.`
+            : `${p.name} rolls ${v}.`);
+    beginMove(d, lap);
+  });
+}
+
+function beginMove(d, lapOnly, extra) {
+  const p = cur();
+  S.roll = d;
+  S.mode = lapOnly ? 'snow' : 'road';
+  S.targets = reachable(p.node, d, lapOnly);
+  S.phase = 'move';
+  S.extraMove = !!extra;
+  if (!Object.keys(S.targets).length) {
+    log(`${p.name} has nowhere to go.`);
+    return endTurn();
+  }
+  save();
+  render();
+}
+
+function chooseTarget(id) {
+  if (busy || S.phase !== 'move' || !S.targets[id]) return;
+  const path = S.targets[id];
+  S.targets = null;
+  animatePath(path, () => land(id));
+}
+
+function actFerry() {
+  S.phase = 'ferry';
+  save(); render();
+}
+
+function chooseFerry(i) {
+  const p = cur();
+  const route = ferryRoutesFrom(p.node)[i];
+  if (!route) return;
+  const free = p.money < COSTS.ferry;
+  p.voyage = { route, i: 0, free };
+  const dest = NODES[route[route.length - 1]].name;
+  if (free) {
+    log(`${p.name} is broke and hitches a free ride towards ${dest} (2 steps).`);
+    sail(2);
+  } else {
+    p.money -= COSTS.ferry;
+    log(`${p.name} boards the ferry to ${dest} (−${euro(COSTS.ferry)}).`);
+    rollDie(v => { log(`${p.name} rolls ${v}.`); sail(v); });
+  }
+}
+
+function actSailOn() {
+  const p = cur();
+  if (p.voyage.free) { log(`${p.name} drifts on (2 free steps).`); sail(2); }
+  else rollDie(v => { log(`${p.name} rolls ${v} at sea.`); sail(v); });
+}
+
+function sail(n) {
+  const p = cur();
+  const v = p.voyage, last = v.route.length - 1;
+  const to = Math.min(v.i + n, last);
+  const path = v.route.slice(v.i, to + 1);
+  v.i = to;
+  animatePath(path, () => {
+    const id = v.route[to];
+    if (to === last) {
+      p.voyage = null;
+      log(`${p.name} docks at ${NODES[id].name}.`);
+      return land(id);
+    }
+    p.node = id;
+    if (NODES[id].special === 'storm') {
+      p.stuck = 'storm';
+      log(`🌊 Baltic storm! ${p.name} is stuck until they roll 1 or 2.`);
+    }
+    endTurn();
+  });
+}
+
+function actEscape() {
+  const p = cur();
+  rollDie(v => {
+    if (v <= 2) {
+      const was = p.stuck;
+      p.stuck = null;
+      log(`${p.name} rolls ${v} and breaks free of the ${was === 'storm' ? 'storm' : 'blizzard'}!`);
+      if (was === 'storm' && p.voyage) sail(v);
+      else beginMove(v, false);
+    } else {
+      log(`${p.name} rolls ${v} — still stuck in the ${p.stuck === 'storm' ? 'storm' : 'blizzard'}.`);
+      endTurn();
+    }
+  });
+}
+
+function actTrain() {
+  S.phase = 'train';
+  save(); render();
+}
+
+function chooseTrain(dest) {
+  const p = cur();
+  if (!RAIL[p.node].includes(dest) || p.money < COSTS.train) return;
+  p.money -= COSTS.train;
+  log(`${p.name} takes the train to ${NODES[dest].name} (−${euro(COSTS.train)}).`);
+  animatePath([p.node, dest], () => land(dest));
+}
+
+function actTryLuck() {
+  const p = cur();
+  rollDie(v => {
+    if (v >= 4) { log(`${p.name} rolls ${v} — lucky! The token is turned for free.`); reveal(p.node); }
+    else { log(`${p.name} rolls ${v} — no luck with the token.`); endTurn(); }
+  });
+}
+
+function actPayFlip(free) {
+  const p = cur();
+  if (free) { p.freeFlip = false; log(`${p.name} uses their sauna-fresh free flip.`); }
+  else { p.money -= COSTS.flip; log(`${p.name} pays ${euro(COSTS.flip)} to turn the token.`); }
+  reveal(p.node);
+}
+
+function actLeave() {
+  log(`${cur().name} leaves the token for now.`);
+  endTurn();
+}
+
+function actSunMove() {
+  const p = cur();
+  rollDie(v => { log(`${p.name} rolls ${v}.`); beginMove(v, false, true); });
+}
+
+function actSkip() {
+  const p = cur();
+  p.skip--;
+  log(`${p.name} skips a turn (${p.skipReason}).`);
+  endTurn();
+}
+
+// --- Landing & tokens --------------------------------------------------
+
+function land(id) {
+  const p = cur();
+  const n = NODES[id];
+  p.node = id;
+
+  switch (n.special) {
+    case 'blizzard':
+      p.stuck = 'blizzard';
+      log(`❄️ Lapland blizzard! ${p.name} is stuck until they roll 1 or 2.`);
+      break;
+    case 'sauna':
+      p.skip = 1; p.skipReason = 'sauna'; p.freeFlip = true;
+      log(`♨️ ${p.name} stops for a sauna: skip a turn, then flip a token for free.`);
+      break;
+    case 'reindeer':
+      log(`🦌 Reindeer on the road — ${p.name}'s move ends here.`);
+      break;
+    case 'sun':
+      log(`☀️ Midnight sun! ${p.name} doesn't need sleep and moves again.`);
+      S.phase = 'sun'; S.targets = null;
+      save(); render();
+      return;
+  }
+
+  if (n.korva) {
+    if (!S.korvaClaimed) {
+      S.korvaClaimed = true;
+      p.money += 500;
+      log(`🎅 ${p.name} is first to Korvatunturi — Santa hands over ${euro(500)}!`);
+    } else {
+      log(`🎅 Santa waves at ${p.name}, but his gift is already given.`);
+    }
+  }
+
+  if (isFinish(id) && canWin(p)) return win();
+  if (hiddenTokenAt(id)) { S.phase = 'token'; save(); render(); return; }
+  endTurn();
+}
+
+function reveal(id) {
+  const p = cur();
+  const t = S.tokens[id];
+  t.revealed = true;
+  const def = TOKENS[t.type];
+  const city = NODES[id];
+  let effect = '', flavour = '', bad = false;
+
+  if (def.value) {
+    const amt = def.value * (city.goldfield ? 2 : 1);
+    p.money += amt;
+    effect = `+${euro(amt)}` + (city.goldfield ? ' (gold fields: double!)' : '');
+    flavour = { gold: 'A nugget glints in the Lemmenjoki river.',
+                silver: 'An old silver brooch turns up under a birch root.',
+                berries: 'A whole bog of cloudberries — a fortune at the market.' }[t.type];
+  } else if (t.type === 'empty') {
+    if (city.swamp) {
+      p.skip += 3; p.skipReason = 'mosquitoes';
+      effect = 'Lose 3 turns'; bad = true;
+      flavour = 'Nothing here — except the mosquitoes. They find you.';
+    } else {
+      effect = 'Nothing'; flavour = 'Just moss, a few lingonberry leaves and one confused mosquito.';
+    }
+  } else if (t.type === 'louhi') {
+    effect = `Lose all your money (−${euro(p.money)})`; bad = true;
+    flavour = 'Louhi, Mistress of Pohjola, takes every euro you have.';
+    p.money = 0;
+  } else if (t.type === 'hiisi') {
+    const lost = Math.floor(p.money / 2);
+    p.money -= lost;
+    effect = `Lose half your money (−${euro(lost)})`; bad = true;
+    flavour = 'A hiisi grabs your purse and vanishes into the spruce forest.';
+  } else if (t.type === 'fragment') {
+    if (S.sampoFound) {
+      p.fragments++;
+      effect = 'A winning token! Carry it home.';
+      flavour = 'With the Sampo found, even a fragment of it carries its magic.';
+    } else {
+      effect = 'Worthless — discarded'; bad = true;
+      flavour = 'A piece of the Sampo… but no magic until the Sampo itself is found.';
+    }
+  } else if (t.type === 'sampo') {
+    p.sampo = true; S.sampoFound = true;
+    effect = 'Carry it to Helsinki or Rovaniemi to win!';
+    flavour = 'The magic mill of the Kalevala — it grinds out grain, salt and gold.';
+  }
+
+  log(`${p.name} turns the token in ${city.name}: ${def.name}. ${effect}.`);
+  S.reveal = { type: t.type, city: city.name, effect, flavour, bad, who: S.current };
+  S.phase = 'reveal';
+  save(); render();
+}
+
+function closeReveal() {
+  S.reveal = null;
+  endTurn();
+}
+
+function win() {
+  const p = cur();
+  S.phase = 'won';
+  S.winner = S.current;
+  log(`🏆 ${p.name} brings ${p.sampo ? 'the Sampo' : 'a Sampo fragment'} home to ${NODES[p.node].name} and wins!`);
+  save(); render();
+}
+
+/* =====================================================================
+   Rendering
+   ===================================================================== */
+const svg = document.getElementById('map');
+const NS = 'http://www.w3.org/2000/svg';
+
+function poly(points) { return points.map(([lo, la]) => P(lo, la).join(',')).join(' '); }
+
+const FINLAND = [[22.9,59.82],[23.6,59.95],[24.5,60.1],[25.4,60.22],[26.4,60.38],[27.2,60.5],[27.8,60.55],[28.7,61.0],[29.4,61.3],[30.2,61.8],[31.1,62.3],[31.55,62.9],[31.2,63.2],[30.4,63.6],[29.95,64.1],[30.1,64.6],[29.7,64.9],[29.6,65.5],[29.9,66.0],[29.3,66.5],[29.1,66.9],[30.0,67.6],[29.4,67.95],[28.7,68.2],[28.5,68.55],[28.9,69.0],[29.3,69.3],[28.9,69.6],[28.4,69.85],[28.0,70.08],[27.3,69.95],[26.5,69.9],[26.0,69.7],[25.8,69.45],[25.3,69.1],[24.8,68.85],[24.0,68.8],[23.3,68.65],[22.4,68.7],[21.6,69.0],[21.0,69.25],[20.55,69.06],[21.1,68.95],[21.9,68.55],[22.9,68.2],[23.6,67.9],[23.6,67.4],[23.9,66.8],[23.7,66.3],[24.15,65.85],[24.6,65.65],[25.1,65.4],[25.3,65.1],[24.9,64.9],[24.5,64.75],[24.0,64.4],[23.2,64.0],[22.5,63.7],[21.8,63.4],[21.2,63.1],[21.4,62.7],[21.2,62.3],[21.45,61.9],[21.5,61.5],[21.4,61.1],[21.2,60.8],[21.5,60.5],[22.1,60.25],[22.6,60.0]];
+const ALAND = [[19.6,60.05],[19.9,59.95],[20.3,60.05],[20.4,60.25],[20.1,60.4],[19.7,60.35],[19.55,60.2]];
+const LAKES = [
+  [[25.6,61.15],[25.45,61.35],[25.5,61.6],[25.35,61.85],[25.55,62.1],[25.7,62.0],[25.65,61.75],[25.75,61.45],[25.7,61.2]],
+  [[27.8,61.15],[28.4,61.2],[28.9,61.6],[29.2,61.9],[29.4,62.3],[28.9,62.6],[28.3,62.7],[27.9,62.5],[28.2,62.2],[27.6,61.9],[27.5,61.6],[28.0,61.5],[28.1,61.3]],
+  [[27.2,68.9],[27.8,68.85],[28.3,69.0],[28.0,69.2],[27.4,69.15]],
+  [[26.6,64.2],[27.3,64.15],[27.4,64.35],[26.9,64.45],[26.5,64.35]],
+];
+
+function buildMap() {
+  let h = '';
+  h += `<rect width="400" height="760" fill="var(--sea)"/>`;
+  h += `<polygon points="${poly(FINLAND)}" fill="var(--land)" stroke="var(--land-edge)" stroke-width="1.5" stroke-linejoin="round"/>`;
+  h += `<polygon points="${poly(ALAND)}" fill="var(--land)" stroke="var(--land-edge)" stroke-width="1.2"/>`;
+  const hai = NODES.hai;
+  h += `<ellipse cx="${hai.x}" cy="${hai.y}" rx="11" ry="6" fill="var(--land)" stroke="var(--land-edge)" stroke-width="1.2"/>`;
+  for (const l of LAKES) h += `<polygon points="${poly(l)}" fill="var(--sea)" stroke="#6a9bbf" stroke-width=".8" stroke-linejoin="round"/>`;
+  // Lapland boundary hint
+  h += `<line x1="40" y1="290" x2="380" y2="290" stroke="#6a8aa3" stroke-width=".8" stroke-dasharray="2 4" opacity=".6"/>`;
+  h += `<text x="48" y="286" font-size="8" fill="#2f5877" font-style="italic">▲ Lapland · snowmobile country</text>`;
+  h += `<text x="30" y="560" font-size="10" fill="#3d6a8d" font-style="italic" transform="rotate(-72 30 560)">Gulf of Bothnia</text>`;
+  h += `<text x="250" y="752" font-size="10" fill="#3d6a8d" font-style="italic">Gulf of Finland</text>`;
+
+  // Rail
+  for (const [a, b] of RAIL_DEFS) {
+    const A = NODES[a], B = NODES[b];
+    h += `<line x1="${A.x}" y1="${A.y}" x2="${B.x}" y2="${B.y}" stroke="#555" stroke-width="3" opacity=".22" stroke-linecap="round"/>`;
+    h += `<line x1="${A.x}" y1="${A.y}" x2="${B.x}" y2="${B.y}" stroke="#fff" stroke-width="1.2" opacity=".5" stroke-dasharray="3 3"/>`;
+  }
+  // Ferry lanes
+  for (const r of SEA_ROUTES) {
+    h += `<polyline points="${r.map(id => NODES[id].x + ',' + NODES[id].y).join(' ')}" fill="none" stroke="#2f6fa0" stroke-width="1.3" stroke-dasharray="4 3" opacity=".9"/>`;
+  }
+  // Roads
+  const drawn = new Set();
+  for (const a in ROAD) for (const b of ROAD[a]) {
+    const k = a < b ? a + '|' + b : b + '|' + a;
+    if (drawn.has(k)) continue; drawn.add(k);
+    const A = NODES[a], B = NODES[b];
+    h += `<line x1="${A.x}" y1="${A.y}" x2="${B.x}" y2="${B.y}" stroke="var(--road)" stroke-width="1.6" opacity=".75"/>`;
+  }
+  // Nodes
+  for (const n of Object.values(NODES)) {
+    if (n.kind === 'city') continue;
+    if (n.special) {
+      h += `<circle cx="${n.x}" cy="${n.y}" r="7" fill="#fff" stroke="${n.kind === 'sea' ? '#2f6fa0' : 'var(--road)'}" stroke-width="1.2"/>`;
+      h += `<text x="${n.x}" y="${n.y + 3.6}" font-size="9.5" text-anchor="middle">${SPECIALS[n.special].icon}</text>`;
+    } else if (n.kind === 'sea') {
+      h += `<circle cx="${n.x}" cy="${n.y}" r="3.4" fill="#fff" stroke="#2f6fa0" stroke-width="1.2"/>`;
+    } else {
+      h += `<circle cx="${n.x}" cy="${n.y}" r="3.4" fill="var(--road)" stroke="#fff" stroke-width=".8"/>`;
+    }
+  }
+  for (const n of Object.values(NODES)) {
+    if (n.kind !== 'city') continue;
+    const r = n.finish ? 8.5 : 6.5;
+    const ring = n.finish ? '#b3261e' : '#4a3b28';
+    h += `<circle cx="${n.x}" cy="${n.y}" r="${r}" fill="#fffaf0" stroke="${ring}" stroke-width="${n.finish ? 2.4 : 1.4}"/>`;
+    if (n.finish) h += `<text x="${n.x}" y="${n.y + 3.5}" font-size="10" text-anchor="middle" fill="#b3261e">★</text>`;
+    if (n.korva) h += `<text x="${n.x}" y="${n.y + 3.6}" font-size="9" text-anchor="middle">🎅</text>`;
+    const off = r + 3;
+    const lab = n.lab || 'r';
+    const [lx, ly, anchor] = lab === 'l' ? [n.x - off, n.y + 3.3, 'end'] : lab === 't' ? [n.x, n.y - off - 1, 'middle'] : lab === 'b' ? [n.x, n.y + off + 8, 'middle'] : [n.x + off, n.y + 3.3, 'start'];
+    let extra = n.station ? ' 🚆' : '';
+    if (n.swamp) extra += ' 🦟';
+    if (n.goldfield) extra += ' ✨';
+    h += `<text class="lbl${n.finish ? ' finish' : ''}${n.island ? ' sea' : ''}" x="${lx}" y="${ly}" text-anchor="${anchor}">${esc(n.name)}${extra}</text>`;
+  }
+  h += `<g id="dyn"></g><g id="pawns"></g><g id="hits"></g>`;
+  svg.innerHTML = h;
+}
+
+const PAWN_OFFSETS = [[0, 0], [-6, -5], [6, -5], [-6, 5], [6, 5], [0, -9]];
+
+function pawnPos(i) {
+  const p = S.players[i];
+  const same = S.players.map((q, j) => j).filter(j => S.players[j].node === p.node);
+  const k = same.indexOf(i);
+  const [ox, oy] = same.length > 1 ? PAWN_OFFSETS[k % PAWN_OFFSETS.length] : [0, 0];
+  const n = NODES[p.node];
+  return [n.x + ox, n.y + oy];
+}
+
+function renderMapDynamic() {
+  let h = '';
+  // Hidden tokens: dark disc on the city
+  for (const id of TOKEN_CITIES) {
+    if (!hiddenTokenAt(id)) continue;
+    const n = NODES[id];
+    h += `<circle cx="${n.x}" cy="${n.y}" r="5" fill="#1c3550" stroke="var(--accent)" stroke-width="1.2"/>`;
+    h += `<text x="${n.x}" y="${n.y + 2.8}" font-size="7" font-weight="700" text-anchor="middle" fill="var(--accent)">?</text>`;
+  }
+  // Highlights
+  const hl = highlightIds();
+  for (const id of hl) {
+    const n = NODES[id];
+    h += `<circle class="target-ring" cx="${n.x}" cy="${n.y}" r="9"/>`;
+  }
+  document.getElementById('dyn').innerHTML = h;
+  document.getElementById('hits').innerHTML = hl.map(id => {
+    const n = NODES[id];
+    return `<circle class="hit" data-node="${id}" cx="${n.x}" cy="${n.y}" r="14"/>`;
+  }).join('');
+  renderPawns();
+}
+
+function highlightIds() {
+  if (!S || busy) return [];
+  const p = cur();
+  if (S.phase === 'move' && S.targets) return Object.keys(S.targets);
+  if (S.phase === 'train') return RAIL[p.node].slice();
+  if (S.phase === 'ferry') return ferryRoutesFrom(p.node).map(r => r[r.length - 1]);
+  return [];
+}
+
+function renderPawns() {
+  const g = document.getElementById('pawns');
+  if (g.childElementCount !== S.players.length) {
+    g.innerHTML = S.players.map((p, i) =>
+      `<g class="pawn" data-p="${i}"><circle r="6" fill="${p.color}" stroke="#fff" stroke-width="1.6"/>` +
+      `<text y="2.8" font-size="7.5" font-weight="800" text-anchor="middle" fill="#fff">${esc(p.name.trim()[0] || '?').toUpperCase()}</text></g>`).join('');
+  }
+  [...g.children].forEach((el, i) => {
+    const [x, y] = pawnPos(i);
+    el.style.transform = `translate(${x}px, ${y}px)`;
+    el.classList.toggle('active', i === S.current);
+  });
+  // current player's pawn on top
+  const active = g.querySelector(`[data-p="${S.current}"]`);
+  if (active && g.lastElementChild !== active) g.appendChild(active);
+}
+
+function animatePath(path, done) {
+  busy = true;
+  render();
+  const p = cur();
+  let k = 1;
+  const step = () => {
+    if (k >= path.length) { busy = false; return done(); }
+    p.node = path[k++];
+    renderPawns();
+    setTimeout(step, FAST ? 0 : 190);
+  };
+  step();
+}
+
+function scrollToPawn(behavior = 'smooth') {
+  if (!S || S.phase === 'won') return;
+  const wrap = document.getElementById('mapwrap');
+  const scale = svg.clientWidth / 400;
+  const n = NODES[cur().node];
+  wrap.scrollTo({ top: n.y * scale - wrap.clientHeight / 2, left: n.x * scale - wrap.clientWidth / 2, behavior });
+}
+
+const PIPS = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
+function drawDie(v) {
+  const die = document.getElementById('die');
+  if (!v) { die.classList.add('blank'); die.innerHTML = '<i></i>'.repeat(9); return; }
+  die.classList.remove('blank');
+  die.innerHTML = [...Array(9)].map((_, i) => `<i class="${PIPS[v].includes(i) ? 'on' : ''}"></i>`).join('');
+}
+
+function renderPlayers() {
+  document.getElementById('players').innerHTML = S.players.map((p, i) => {
+    let tags = '';
+    if (p.sampo) tags += ' 🌟';
+    if (p.fragments) tags += ` 🧩${p.fragments > 1 ? '×' + p.fragments : ''}`;
+    if (p.voyage) tags += ' ⛴️';
+    if (p.stuck) tags += p.stuck === 'storm' ? ' 🌊' : ' ❄️';
+    if (p.skip) tags += ` 💤${p.skip}`;
+    if (p.freeFlip) tags += ' ♨️';
+    return `<div class="pchip${i === S.current ? ' current' : ''}"><span class="dot" style="background:${p.color}"></span>` +
+      `${esc(p.name)} <span class="money">${euro(p.money)}</span>${tags}</div>`;
+  }).join('');
+  const chip = document.querySelector('.pchip.current');
+  if (chip) chip.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+}
+
+function btn(act, label, sub, { disabled = false, primary = false, wide = false, arg = '' } = {}) {
+  return `<button data-act="${act}" data-arg="${esc(arg)}" class="${primary ? 'primary' : ''}${wide ? ' wide' : ''}"${disabled || busy ? ' disabled' : ''}>` +
+    `${label}${sub ? `<small>${sub}</small>` : ''}</button>`;
+}
+
+function renderPanel() {
+  const p = cur();
+  document.getElementById('who').innerHTML = `<span class="dot" style="background:${p.color}"></span>${esc(p.name)}`;
+  document.getElementById('turnno').textContent = `· round ${S.turn}`;
+  const here = NODES[p.node];
+  let status = '', acts = '';
+
+  switch (S.phase) {
+    case 'skip':
+      status = p.skipReason === 'sauna' ? 'Relaxing in the sauna — this turn is skipped.' :
+               `Fighting off mosquitoes — ${p.skip} turn${p.skip > 1 ? 's' : ''} left to skip.`;
+      acts = btn('skip', 'Skip turn', null, { primary: true, wide: true });
+      break;
+
+    case 'start': {
+      if (p.stuck) {
+        status = p.stuck === 'storm' ? 'Stuck in a Baltic storm. Roll 1 or 2 to sail on.' : 'Snowed in by a blizzard. Roll 1 or 2 to break free.';
+        acts = btn('escape', 'Roll to escape', 'Need 1 or 2', { primary: true, wide: true });
+        break;
+      }
+      if (p.voyage) {
+        const dest = NODES[p.voyage.route[p.voyage.route.length - 1]].name;
+        status = `At sea, heading for ${dest}.`;
+        acts = btn('sail', 'Sail on', p.voyage.free ? 'Free ride: 2 steps' : 'Roll for distance', { primary: true, wide: true });
+        break;
+      }
+      status = `In ${nodeName(p.node)}.`;
+      if (here.kind === 'city' && !hiddenTokenAt(p.node) && S.tokens[p.node]) status += ' Token already turned.';
+      if (hiddenTokenAt(p.node)) status += ' A hidden token lies here.';
+      if (canWin(p)) status += ` You carry ${p.sampo ? 'the Sampo' : 'a winning fragment'} — get it home!`;
+      const canRoad = ROAD[p.node].length > 0;
+      acts += btn('walk', '🥾 Roll &amp; walk', canRoad ? 'Road · free' : 'No road — island', { primary: true, disabled: !canRoad });
+      if (here.harbour) {
+        const broke = p.money < COSTS.ferry;
+        acts += btn('ferry', '⛴️ Ferry', broke ? 'Broke: 2 steps free' : `${euro(COSTS.ferry)} · roll`);
+      }
+      if (RAIL[p.node].length) acts += btn('train', '🚆 Train', euro(COSTS.train), { disabled: p.money < COSTS.train });
+      if (here.lap) acts += btn('snow', '🛷 Snowmobile', `${euro(COSTS.snow)} · roll ×2`, { disabled: p.money < COSTS.snow || !ROAD[p.node].some(n => NODES[n].lap) });
+      if (hiddenTokenAt(p.node)) {
+        acts += btn('luck', '🎲 Try luck', 'Roll 4–6: free flip');
+        if (p.freeFlip) acts += btn('freeflip', '♨️ Free flip', 'Sauna reward');
+        acts += btn('payflip', '🔍 Flip token', euro(COSTS.flip), { disabled: p.money < COSTS.flip });
+      }
+      break;
+    }
+
+    case 'move':
+      if (busy) { status = 'Moving…'; break; }
+      status = `${S.mode === 'snow' ? 'Snowmobile' : 'Walk'} ${S.roll} step${S.roll > 1 ? 's' : ''}` +
+        `${S.extraMove ? ' (midnight sun bonus)' : ''} — tap a glowing space. You may stop early at a city.`;
+      acts = Object.keys(S.targets || {}).filter(id => NODES[id].kind === 'city')
+        .map(id => btn('go', NODES[id].name, null, { arg: id })).join('');
+      break;
+
+    case 'ferry': {
+      const broke = p.money < COSTS.ferry;
+      status = broke ? 'You are broke: sail 2 steps for free. Where to?' : `Board for ${euro(COSTS.ferry)}, then roll. You stop at the first harbour.`;
+      acts = ferryRoutesFrom(p.node).map((r, i) => {
+        const dest = NODES[r[r.length - 1]];
+        return btn('ferryto', dest.name, `${r.length - 1} step${r.length > 2 ? 's' : ''}${r.lake ? ' · lake' : ''}`, { arg: i });
+      }).join('') + btn('cancel', 'Back', null, { wide: true });
+      break;
+    }
+
+    case 'train':
+      status = `Pick a station (${euro(COSTS.train)}).`;
+      acts = RAIL[p.node].map(id => btn('trainto', NODES[id].name, null, { arg: id })).join('') + btn('cancel', 'Back', null, { wide: true });
+      break;
+
+    case 'token':
+      status = `A hidden token lies in ${here.name}${here.goldfield ? ' — gold fields: treasure is worth double!' : here.swamp ? ' — mosquito swamp: an empty token costs 3 turns.' : '.'}`;
+      if (p.freeFlip) acts += btn('freeflip', '♨️ Flip for free', 'Sauna reward', { primary: true });
+      acts += btn('payflip', `🔍 Flip for ${euro(COSTS.flip)}`, null, { primary: !p.freeFlip, disabled: p.money < COSTS.flip });
+      acts += btn('leave', 'Carry on', 'Try your luck next turn, or move on', { wide: true });
+      break;
+
+    case 'sun':
+      status = 'Midnight sun — no need to sleep. Take an extra move right away!';
+      acts = btn('sunmove', '☀️ Roll &amp; walk again', 'Road · free', { primary: true, wide: true });
+      break;
+
+    case 'reveal':
+      status = '';
+      break;
+
+    case 'won':
+      status = `${S.players[S.winner].name} found the way home with the Sampo magic. Game over.`;
+      acts = btn('newgame', 'New game', null, { primary: true, wide: true }) + btn('showwin', 'Show result', null, { wide: true });
+      break;
+  }
+
+  if (busy && S.phase !== 'move') status = status || '…';
+  document.getElementById('status').textContent = status;
+  document.getElementById('actions').innerHTML = acts;
+  document.getElementById('loglines').innerHTML = S.log.slice(-2).map(l =>
+    `<div>${l.c ? `<b style="color:${l.c}">●</b> ` : ''}${esc(l.text)}</div>`).join('');
+}
+
+function tokenIcon(type) { return TOKENS[type].icon; }
+
+function renderOverlay() {
+  const ov = document.getElementById('overlay'), card = document.getElementById('card');
+  if (ov.dataset.sticky) return;
+  if (S && S.phase === 'reveal' && S.reveal && !busy) {
+    const r = S.reveal, p = S.players[r.who];
+    card.innerHTML = `<div class="reveal">
+      <div style="color:var(--muted);font-size:13px">${esc(p.name)} turns the token in ${esc(r.city)}</div>
+      <div class="big">${tokenIcon(r.type)}</div>
+      <h2>${TOKENS[r.type].name}</h2>
+      <p>${esc(r.flavour)}</p>
+      <p class="effect${r.bad ? ' bad' : ''}">${esc(r.effect)}</p>
+      <button class="primary" data-act="closereveal">Continue</button></div>`;
+    ov.classList.remove('hidden');
+    return;
+  }
+  if (S && S.phase === 'won' && !hideWin) {
+    const p = S.players[S.winner];
+    const standings = S.players.map((q, i) => ({ q, i })).sort((a, b) => b.q.money - a.q.money)
+      .map(({ q }) => `<div>${esc(q.name)} — ${euro(q.money)}${q.sampo ? ' 🌟' : ''}${q.fragments ? ' 🧩' : ''}</div>`).join('');
+    card.innerHTML = `<div class="win"><div class="big">🌟</div>
+      <h2 style="color:${p.color}">${esc(p.name)} wins!</h2>
+      <p>${esc(p.name)} carried ${p.sampo ? 'the Sampo' : 'a Sampo fragment'} home to ${NODES[p.node].name} in round ${S.turn}.</p>
+      <div class="log-list" style="margin:12px 0;text-align:left">${standings}</div>
+      <button class="primary" style="width:100%" data-act="newgame">New game</button>
+      <button class="ghost" style="width:100%;margin-top:8px" data-act="closeov">Look at the board</button></div>`;
+    ov.classList.remove('hidden');
+    return;
+  }
+  ov.classList.add('hidden');
+}
+
+function showSheet(html) {
+  const ov = document.getElementById('overlay');
+  ov.dataset.sticky = '1';
+  document.getElementById('card').innerHTML = html + `<div class="close-row"><button class="primary" data-act="closeov">Close</button></div>`;
+  ov.classList.remove('hidden');
+}
+
+function showLog() {
+  showSheet(`<h2>Turn log</h2><div class="log-list">${S.log.slice().reverse().map(l =>
+    `<div>${l.c ? `<b style="color:${l.c}">●</b> ` : ''}${esc(l.text)}</div>`).join('')}</div>`);
+}
+
+function showRules() {
+  const tokRows = Object.entries(TOKENS).map(([k, t]) => `<tr><td>${k === 'berries' ? '🟠' : t.icon} ${t.name}</td><td>${{
+    gold: '+€1,000', silver: '+€600', berries: '+€300', empty: 'Nothing', louhi: 'Lose all money', hiisi: 'Lose half your money',
+    fragment: 'Discarded before the Sampo is found; a winning token after', sampo: 'Carry home to win' }[k]} <span style="color:var(--muted)">(×${t.n})</span></td></tr>`).join('');
+  showSheet(`<div class="rules"><h2>How to play</h2>
+    <p>Race across Finland to find the <b>Sampo</b> and carry it back to <b>Helsinki</b> or <b>Rovaniemi</b>. Everyone starts with ${euro(START_MONEY)}.</p>
+    <h3>Travel</h3><table>
+      <tr><td>🥾 Road</td><td>Free. Roll and move exactly that many steps, or stop early at a city. No doubling back.</td></tr>
+      <tr><td>⛴️ Ferry</td><td>${euro(COSTS.ferry)} to board at a harbour. Roll for distance; you stop at the first harbour. Broke players sail 2 steps free. Islands are ferry-only.</td></tr>
+      <tr><td>🚆 Train</td><td>${euro(COSTS.train)}. Jump directly between two linked stations.</td></tr>
+      <tr><td>🛷 Snowmobile</td><td>${euro(COSTS.snow)}. Lapland only (north of the dotted line). Roll and double it.</td></tr></table>
+    <h3>Tokens</h3><p>At a city with a hidden token (?), choose: pay ${euro(COSTS.flip)} to flip it, or carry on. If you stay, on a later turn you can roll 4–6 to flip it free.</p>
+    <table>${tokRows}</table>
+    <h3>Special spaces</h3><table>
+      <tr><td>❄️ Blizzard</td><td>Stuck until you roll 1 or 2.</td></tr>
+      <tr><td>🦟 Sodankylä</td><td>Mosquito swamp: an empty token here costs 3 turns.</td></tr>
+      <tr><td>✨ Inari</td><td>Lemmenjoki gold fields: treasure found here is worth double.</td></tr>
+      <tr><td>🎅 Korvatunturi</td><td>First to arrive gets +€500 from Santa.</td></tr>
+      <tr><td>🌊 Baltic storm</td><td>Stuck until you roll 1 or 2.</td></tr>
+      <tr><td>♨️ Sauna</td><td>Skip a turn, then flip a token for free.</td></tr>
+      <tr><td>☀️ Midnight sun</td><td>Take an extra move right away.</td></tr>
+      <tr><td>🦌 Reindeer</td><td>Your move ends here.</td></tr></table>
+    <h3>Winning</h3><p>First to reach Helsinki or Rovaniemi carrying the Sampo — or a Sampo fragment once the Sampo has been found — wins.</p></div>`);
+}
+
+function render() {
+  if (!S) return;
+  renderPlayers();
+  renderMapDynamic();
+  renderPanel();
+  renderOverlay();
+}
+
+/* =====================================================================
+   Events
+   ===================================================================== */
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-act]');
+  if (!b || b.disabled) return;
+  const act = b.dataset.act, arg = b.dataset.arg;
+  if (act === 'closeov') {
+    const ov = document.getElementById('overlay');
+    delete ov.dataset.sticky; ov.classList.add('hidden');
+    if (S && S.phase === 'won') hideWin = true;
+    else if (S) renderOverlay();
+    return;
+  }
+  if (act === 'showwin') { hideWin = false; renderOverlay(); return; }
+  if (act === 'newgame') { showSetup(); return; }
+  if (busy) return;
+  switch (act) {
+    case 'walk': actWalk('road'); break;
+    case 'snow': actWalk('snow'); break;
+    case 'ferry': actFerry(); break;
+    case 'ferryto': chooseFerry(+arg); break;
+    case 'sail': actSailOn(); break;
+    case 'escape': actEscape(); break;
+    case 'train': actTrain(); break;
+    case 'trainto': chooseTrain(arg); break;
+    case 'luck': actTryLuck(); break;
+    case 'payflip': actPayFlip(false); break;
+    case 'freeflip': actPayFlip(true); break;
+    case 'leave': actLeave(); break;
+    case 'skip': actSkip(); break;
+    case 'sunmove': actSunMove(); break;
+    case 'go': chooseTarget(arg); break;
+    case 'cancel': S.phase = 'start'; save(); render(); break;
+    case 'closereveal': closeReveal(); break;
+  }
+});
+
+svg.addEventListener('click', e => {
+  const hit = e.target.closest('[data-node]');
+  if (!hit || busy || !S) return;
+  const id = hit.dataset.node;
+  if (S.phase === 'move') chooseTarget(id);
+  else if (S.phase === 'train') chooseTrain(id);
+  else if (S.phase === 'ferry') {
+    const i = ferryRoutesFrom(cur().node).findIndex(r => r[r.length - 1] === id);
+    if (i >= 0) chooseFerry(i);
+  }
+});
+
+document.getElementById('loglines').addEventListener('click', showLog);
+document.getElementById('rulesbtn').addEventListener('click', showRules);
+document.getElementById('rulesbtn2').addEventListener('click', showRules);
+document.getElementById('zoombtn').addEventListener('click', () => {
+  zoomed = !zoomed;
+  document.getElementById('mapwrap').classList.toggle('zoom', zoomed);
+  requestAnimationFrame(() => scrollToPawn('auto'));
+});
+document.getElementById('menubtn').addEventListener('click', () => {
+  if (confirm('Start a new game? The current game will be lost.')) showSetup();
+});
+
+/* =====================================================================
+   Setup screen
+   ===================================================================== */
+let setup = {
+  players: [
+    { name: 'Väinämöinen', color: COLORS[0], start: 'hel' },
+    { name: 'Ilmarinen', color: COLORS[1], start: 'rov' },
+  ],
+  first: 'random',
+};
+const DEFAULT_NAMES = ['Väinämöinen', 'Ilmarinen', 'Lemminkäinen', 'Aino', 'Kullervo', 'Joukahainen'];
+
+function renderSetup() {
+  document.getElementById('pcount').textContent = setup.players.length;
+  document.getElementById('pminus').disabled = setup.players.length <= 2;
+  document.getElementById('pplus').disabled = setup.players.length >= 6;
+  document.getElementById('prows').innerHTML = setup.players.map((p, i) => `
+    <div class="prow">
+      <button class="swatch" data-sw="${i}" style="background:${p.color}" aria-label="Change colour"></button>
+      <input data-name="${i}" value="${esc(p.name)}" maxlength="16" aria-label="Player ${i + 1} name">
+      <div class="startsel">
+        <button data-start="${i}" data-city="hel" class="${p.start === 'hel' ? 'on' : ''}">Helsinki</button>
+        <button data-start="${i}" data-city="rov" class="${p.start === 'rov' ? 'on' : ''}">Rovaniemi</button>
+      </div>
+    </div>`).join('');
+  const sel = document.getElementById('firstsel');
+  sel.innerHTML = `<option value="random">Random</option>` +
+    setup.players.map((p, i) => `<option value="${i}">${esc(p.name || 'Player ' + (i + 1))}</option>`).join('');
+  sel.value = setup.first === 'random' || +setup.first < setup.players.length ? String(setup.first) : 'random';
+}
+
+document.getElementById('pplus').addEventListener('click', () => {
+  if (setup.players.length >= 6) return;
+  const used = setup.players.map(p => p.color);
+  const i = setup.players.length;
+  setup.players.push({ name: DEFAULT_NAMES[i], color: COLORS.find(c => !used.includes(c)), start: i % 2 ? 'rov' : 'hel' });
+  renderSetup();
+});
+document.getElementById('pminus').addEventListener('click', () => {
+  if (setup.players.length > 2) setup.players.pop();
+  renderSetup();
+});
+document.getElementById('prows').addEventListener('click', e => {
+  const sw = e.target.closest('[data-sw]');
+  if (sw) {
+    const p = setup.players[+sw.dataset.sw];
+    const used = setup.players.filter(q => q !== p).map(q => q.color);
+    let k = COLORS.indexOf(p.color);
+    do { k = (k + 1) % COLORS.length; } while (used.includes(COLORS[k]));
+    p.color = COLORS[k];
+    renderSetup();
+  }
+  const st = e.target.closest('[data-start]');
+  if (st) { setup.players[+st.dataset.start].start = st.dataset.city; renderSetup(); }
+});
+document.getElementById('prows').addEventListener('input', e => {
+  const i = e.target.dataset.name;
+  if (i != null) {
+    setup.players[+i].name = e.target.value;
+    const opt = document.querySelector(`#firstsel option[value="${i}"]`);
+    if (opt) opt.textContent = e.target.value || 'Player ' + (+i + 1);
+  }
+});
+document.getElementById('firstsel').addEventListener('change', e => { setup.first = e.target.value; });
+document.getElementById('startbtn').addEventListener('click', () => {
+  const players = setup.players.map((p, i) => ({ ...p, name: p.name.trim() || `Player ${i + 1}` }));
+  const first = setup.first === 'random' ? Math.floor(Math.random() * players.length) : +setup.first;
+  showGame();
+  newGame({ players, first });
+});
+document.getElementById('backbtn').addEventListener('click', showGame);
+
+function showSetup() {
+  const ov = document.getElementById('overlay');
+  delete ov.dataset.sticky; ov.classList.add('hidden');
+  document.getElementById('game').classList.add('hidden');
+  document.getElementById('setup').classList.remove('hidden');
+  document.getElementById('backbtn').classList.toggle('hidden', !(S && S.phase !== 'won'));
+  renderSetup();
+}
+
+function showGame() {
+  document.getElementById('setup').classList.add('hidden');
+  document.getElementById('game').classList.remove('hidden');
+  if (S) { render(); drawDie(S.lastRoll); requestAnimationFrame(() => scrollToPawn('auto')); }
+}
+
+/* =====================================================================
+   Boot
+   ===================================================================== */
+buildMap();
+drawDie(null);
+(function boot() {
+  const saved = loadSaved();
+  if (saved && saved.v === 1 && saved.players && saved.phase !== 'won') {
+    S = saved;
+    // A move interrupted mid-animation resumes from the last saved phase.
+    if (S.phase === 'move' && !S.targets) S.phase = 'start';
+    showGame();
+  } else {
+    showSetup();
+  }
+})();
+
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
