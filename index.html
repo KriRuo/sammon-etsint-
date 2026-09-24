@@ -1176,7 +1176,8 @@ document.getElementById('zoombtn').addEventListener('click', () => {
   requestAnimationFrame(() => scrollToPawn('auto'));
 });
 document.getElementById('menubtn').addEventListener('click', () => {
-  if (confirm('Start a new game? The current game will be lost.')) showSetup();
+  showSheet(`<h2>Start a new game?</h2><p>The current game will be lost.</p>
+    <button class="primary" style="width:100%;margin-top:8px" data-act="newgame">Start new game</button>`);
 });
 
 /* =====================================================================
