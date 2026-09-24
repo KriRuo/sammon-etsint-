@@ -36,7 +36,7 @@ The rules engine enforces everything in the spec:
 
 ## Decisions on the open questions (easy to change)
 
-- **Language:** the interface is in English, but place and folklore names stay Finnish. A FI/EN toggle is the obvious next step.
+- **Language:** Finnish and English, switched with the FI/EN button in the header or on the setup screen. The first visit follows the phone's language, and the choice is remembered. Switching mid-game also retranslates the turn log and any open pop-up. All text lives in the `STR` table in `index.html`.
 - **Name:** *Sammon etsintä*.
 - **Finish cities:** Helsinki and Rovaniemi, as in the spec.
 - **Snowmobile:** kept. It makes Lapland worth the trip.
