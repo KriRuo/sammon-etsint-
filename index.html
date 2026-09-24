@@ -54,8 +54,8 @@ header {
   padding: calc(env(safe-area-inset-top) + 4px) 8px 4px 12px;
   background: var(--panel);
 }
-header h1 { font-size: 17px; margin: 0; flex: 1; min-width: 0; letter-spacing: .3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-header h1 small { color: var(--muted); font-weight: 400; font-size: 12px; }
+header h1 { font-size: 17px; line-height: 1.15; margin: 0; flex: 1; min-width: 0; letter-spacing: .3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+header h1 small { display: block; color: var(--muted); font-weight: 400; font-size: 12px; letter-spacing: 0; }
 #players { display: flex; gap: 6px; overflow-x: auto; padding: 6px 8px; background: var(--panel); border-bottom: 1px solid #ffffff14; }
 .pchip {
   flex: 0 0 auto; display: flex; align-items: center; gap: 6px;
@@ -137,7 +137,9 @@ header h1 small { color: var(--muted); font-weight: 400; font-size: 12px; }
 #setup { min-height: 100%; padding: calc(env(safe-area-inset-top) + 16px) 16px 24px; max-width: 520px; margin: 0 auto; }
 #setup h1 { margin: 8px 0 0; font-size: 30px; }
 .setup-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.langsel { padding: 8px 12px; font-size: 13.5px; flex: 0 0 auto; }
+.langseg { display: flex; flex: 0 0 auto; border: 1px solid #ffffff33; border-radius: 9px; overflow: hidden; }
+.langseg button { border-radius: 0; background: transparent; padding: 8px 11px; font-size: 13px; font-weight: 700; letter-spacing: .5px; }
+.langseg button.on { background: var(--accent); color: var(--accent-ink); }
 button.icon.lang { font-size: 13px; font-weight: 800; letter-spacing: .5px; border: 1px solid #ffffff44; border-radius: 8px; padding: 4px 8px; margin-right: 4px; }
 #setup .tag { color: var(--muted); margin: 2px 0 18px; }
 .field-label { font-size: 13px; color: var(--muted); margin: 14px 0 6px; }
@@ -167,7 +169,7 @@ select {
 
 <!-- Setup screen -->
 <section id="setup" class="hidden">
-  <div class="setup-top"><h1>Sammon etsintä</h1><button class="ghost langsel" id="langbtn2" data-i18n="langSwitch">Suomeksi</button></div>
+  <div class="setup-top"><h1>Sammon etsintä</h1><div class="langseg" id="langseg" role="group" data-i18n-title="langTitle"><button data-lang="en">EN</button><button data-lang="fi">FI</button><button data-lang="sv">SV</button></div></div>
   <p class="tag" data-i18n="tagline">Race across Finland, find the Sampo, carry it home to Helsinki or Rovaniemi.</p>
 
   <div class="field-label" data-i18n="players">Players</div>
@@ -192,7 +194,7 @@ select {
 <section id="game" class="hidden">
   <header>
     <h1>Sammon etsintä <small id="turnno"></small></h1>
-    <button class="icon lang" id="langbtn" data-i18n="langLabel" data-i18n-title="langSwitch">FI</button>
+    <button class="icon lang" id="langbtn" data-i18n-title="langTitle">EN</button>
     <button class="icon" id="zoombtn" data-i18n-title="zoom">🔍</button>
     <button class="icon" id="rulesbtn" data-i18n-title="rules">📜</button>
     <button class="icon" id="menubtn" data-i18n-title="newGame">⟲</button>
@@ -373,8 +375,9 @@ const isFinish = id => !!NODES[id].finish;
    ===================================================================== */
 const LANG_KEY = 'sammon-etsinta:lang';
 let lang = (() => {
-  try { const l = localStorage.getItem(LANG_KEY); if (l === 'en' || l === 'fi') return l; } catch (e) { /* storage unavailable */ }
-  return (navigator.language || '').toLowerCase().startsWith('fi') ? 'fi' : 'en';
+  try { const l = localStorage.getItem(LANG_KEY); if (['en', 'fi', 'sv'].includes(l)) return l; } catch (e) { /* storage unavailable */ }
+  const nav = (navigator.language || '').toLowerCase();
+  return nav.startsWith('fi') ? 'fi' : nav.startsWith('sv') ? 'sv' : 'en';
 })();
 
 const steps = (n, one, many) => `${n} ${n === 1 ? one : many}`;
@@ -385,8 +388,8 @@ const STR = {
     players: 'Players', setupRows: 'Names, colours and starting city', firstPlayer: 'Starting player',
     startHunt: 'Start the hunt', backToGame: 'Back to current game', rules: 'Rules', random: 'Random',
     playerN: ({ i }) => `Player ${i}`, fewer: 'Fewer players', more: 'More players', changeColour: 'Change colour',
-    zoom: 'Zoom', newGame: 'New game', langSwitch: 'Suomeksi', langLabel: 'FI',
-    round: ({ r }) => `· round ${r}`,
+    zoom: 'Zoom', newGame: 'New game', langTitle: 'Language',
+    round: ({ r }) => `Round ${r}`,
     // map
     mapLapland: '▲ Lapland · snowmobile country', mapBothnia: 'Gulf of Bothnia', mapGulf: 'Gulf of Finland',
     openWater: 'open water', theRoad: 'the road',
@@ -487,8 +490,8 @@ const STR = {
     players: 'Pelaajat', setupRows: 'Nimet, värit ja lähtökaupunki', firstPlayer: 'Aloittaja',
     startHunt: 'Aloita etsintä', backToGame: 'Takaisin peliin', rules: 'Säännöt', random: 'Satunnainen',
     playerN: ({ i }) => `Pelaaja ${i}`, fewer: 'Vähemmän pelaajia', more: 'Lisää pelaajia', changeColour: 'Vaihda väriä',
-    zoom: 'Suurenna', newGame: 'Uusi peli', langSwitch: 'In English', langLabel: 'EN',
-    round: ({ r }) => `· kierros ${r}`,
+    zoom: 'Suurenna', newGame: 'Uusi peli', langTitle: 'Kieli',
+    round: ({ r }) => `Kierros ${r}`,
     mapLapland: '▲ Lappi · moottorikelkkamaata', mapBothnia: 'Pohjanlahti', mapGulf: 'Suomenlahti',
     openWater: 'avomeri', theRoad: 'tie',
     sp_blizzard: 'Lapin lumimyrsky', sp_sun: 'Yötön yö', sp_reindeer: 'Poroja tiellä', sp_sauna: 'Sauna', sp_storm: 'Itämeren myrsky',
@@ -577,10 +580,114 @@ const STR = {
     close: 'Sulje', logTitle: 'Tapahtumat',
     ng_q: 'Aloitetaanko uusi peli?', ng_text: 'Nykyinen peli menetetään.', ng_go: 'Aloita uusi peli',
   },
+
+  sv: {
+    tagline: 'Tävla genom Finland, hitta Sampo och för det hem till Helsingfors eller Rovaniemi.',
+    players: 'Spelare', setupRows: 'Namn, färger och startstad', firstPlayer: 'Startspelare',
+    startHunt: 'Börja jakten', backToGame: 'Tillbaka till spelet', rules: 'Regler', random: 'Slumpvis',
+    playerN: ({ i }) => `Spelare ${i}`, fewer: 'Färre spelare', more: 'Fler spelare', changeColour: 'Byt färg',
+    zoom: 'Zooma', newGame: 'Nytt spel', langTitle: 'Språk',
+    round: ({ r }) => `Omgång ${r}`,
+    mapLapland: '▲ Lappland · snöskoterland', mapBothnia: 'Bottniska viken', mapGulf: 'Finska viken',
+    openWater: 'öppet vatten', theRoad: 'vägen',
+    sp_blizzard: 'Snöstorm i Lappland', sp_sun: 'Midnattssol', sp_reindeer: 'Renar på vägen', sp_sauna: 'Bastu', sp_storm: 'Östersjöstorm',
+    tok_gold: 'Lemmenjokiguld', tok_silver: 'Silver', tok_berries: 'Hjortron', tok_empty: 'Tom',
+    tok_louhi: 'Louhi', tok_hiisi: 'Hiisi', tok_fragment: 'Sampofragment', tok_sampo: 'Sampo',
+    reason_sauna: 'bastu', reason_mosquitoes: 'myggor',
+    lg_start: ({ n }) => `Jakten har börjat! ${n} börjar.`,
+    lg_snow: ({ n, cost, v, d }) => `${n} startar en snöskoter (−${cost}) och slår ${v} → ${d} steg.`,
+    lg_rolls: ({ n, v }) => `${n} slår ${v}.`,
+    lg_rollsSea: ({ n, v }) => `${n} slår ${v} till sjöss.`,
+    lg_nowhere: ({ n }) => `${n} kommer ingenstans.`,
+    lg_ferryFree: ({ n, dest }) => `${n} är pank och får åka gratis mot ${dest} (2 steg).`,
+    lg_ferry: ({ n, dest, cost }) => `${n} går ombord på färjan till ${dest} (−${cost}).`,
+    lg_drift: ({ n }) => `${n} driver vidare (2 gratis steg).`,
+    lg_docks: ({ n, city }) => `${n} lägger till i ${city}.`,
+    lg_storm: ({ n }) => `🌊 Östersjöstorm! ${n} sitter fast tills hen slår 1 eller 2.`,
+    lg_escape: ({ n, v, storm }) => `${n} slår ${v} och tar sig loss ur ${storm ? 'stormen' : 'snöstormen'}!`,
+    lg_stuck: ({ n, v, storm }) => `${n} slår ${v} — sitter fortfarande fast i ${storm ? 'stormen' : 'snöstormen'}.`,
+    lg_train: ({ n, city, cost }) => `${n} tar tåget till ${city} (−${cost}).`,
+    lg_luckYes: ({ n, v }) => `${n} slår ${v} — tur! Brickan vänds gratis.`,
+    lg_luckNo: ({ n, v }) => `${n} slår ${v} — ingen tur med brickan.`,
+    lg_freeFlip: ({ n }) => `${n} använder sin bastufräscha gratisvändning.`,
+    lg_payFlip: ({ n, cost }) => `${n} betalar ${cost} och vänder brickan.`,
+    lg_leave: ({ n }) => `${n} låter brickan ligga tills vidare.`,
+    lg_skip: ({ n, reason }) => `${n} står över en tur (${reason}).`,
+    lg_blizzard: ({ n }) => `❄️ Snöstorm i Lappland! ${n} sitter fast tills hen slår 1 eller 2.`,
+    lg_sauna: ({ n }) => `♨️ ${n} stannar för att basta: stå över en tur och vänd sedan en bricka gratis.`,
+    lg_reindeer: ({ n }) => `🦌 Renar på vägen — här tar förflyttningen slut för ${n}.`,
+    lg_sun: ({ n }) => `☀️ Midnattssol! ${n} behöver ingen sömn och flyttar igen.`,
+    lg_korva: ({ n, amt }) => `🎅 ${n} är först till Korvatunturi — julgubben delar ut ${amt}!`,
+    lg_korvaLate: ({ n }) => `🎅 Julgubben vinkar åt ${n}, men gåvan är redan given.`,
+    lg_turned: ({ n, city, tok, effect }) => `${n} vänder brickan i ${city}: ${tok}. ${effect}.`,
+    lg_win: ({ n, sampo, city }) => `🏆 ${n} för ${sampo ? 'Sampo' : 'ett Sampofragment'} hem till ${city} och vinner!`,
+    ef_money: ({ amt, gf }) => `+${amt}` + (gf ? ' (guldfälten: dubbelt!)' : ''),
+    ef_lose3: 'Förlora 3 turer', ef_nothing: 'Ingenting',
+    ef_loseAll: ({ amt }) => `Förlora alla dina pengar (−${amt})`,
+    ef_loseHalf: ({ amt }) => `Förlora hälften av dina pengar (−${amt})`,
+    ef_fragWin: 'En vinstbricka! För den hem.', ef_fragBin: 'Värdelös — kasseras',
+    ef_sampo: 'För det till Helsingfors eller Rovaniemi så vinner du!',
+    fl_gold: 'En guldklimp glimmar i Lemmenjoki älv.',
+    fl_silver: 'En gammal silversölja dyker upp under en björkrot.',
+    fl_berries: 'En hel myr full av hjortron — en förmögenhet på torget.',
+    fl_swamp: 'Ingenting här — utom myggorna. De hittar dig.',
+    fl_empty: 'Bara mossa, några lingonblad och en förvirrad mygga.',
+    fl_louhi: 'Louhi, Pohjolas värdinna, tar varenda euro du har.',
+    fl_hiisi: 'En hiisi nappar din börs och försvinner in i granskogen.',
+    fl_fragWin: 'Nu när Sampo är funnet bär även ett fragment av det på magin.',
+    fl_fragBin: 'En bit av Sampo… men utan magi tills själva Sampo har hittats.',
+    fl_sampo: 'Kalevalas trollkvarn — den mal fram mjöl, salt och guld.',
+    st_skipSauna: 'Avkoppling i bastun — den här turen står du över.',
+    st_skipMosq: ({ k }) => `Slåss mot myggor — ${k} ${k > 1 ? 'turer' : 'tur'} kvar att stå över.`,
+    bt_skip: 'Stå över turen',
+    st_storm: 'Fast i en Östersjöstorm. Slå 1 eller 2 för att segla vidare.',
+    st_blizzard: 'Insnöad av en snöstorm. Slå 1 eller 2 för att ta dig loss.',
+    bt_escape: 'Slå för att ta dig loss', sb_escape: 'Du behöver 1 eller 2',
+    st_atSea: ({ dest }) => `Till sjöss, på väg mot ${dest}.`,
+    bt_sail: 'Segla vidare', sb_sailFree: 'Gratis skjuts: 2 steg', sb_sailRoll: 'Slå för avstånd',
+    st_in: ({ place, isCity }) => `${isCity ? 'I' : 'På'} ${place}.`,
+    st_turned: ' Brickan är redan vänd.', st_hidden: ' Här ligger en dold bricka.',
+    st_carry: ({ sampo }) => ` Du bär på ${sampo ? 'Sampo' : 'ett vinnande fragment'} — för det hem!`,
+    bt_walk: '🥾 Slå &amp; gå', sb_walk: 'Väg · gratis', sb_island: 'Ingen väg — ö',
+    bt_ferry: '⛴️ Färja', sb_ferryBroke: 'Pank: 2 steg gratis', sb_ferry: ({ cost }) => `${cost} · slå`,
+    bt_train: '🚆 Tåg',
+    bt_snow: '🛷 Snöskoter', sb_snow: ({ cost }) => `${cost} · slag ×2`,
+    bt_luck: '🎲 Pröva lyckan', sb_luck: 'Slå 4–6: gratis vändning',
+    bt_freeFlip: '♨️ Gratis vändning', sb_sauna: 'Bastubelöning', bt_flip: '🔍 Vänd brickan',
+    st_moving: 'Flyttar…',
+    st_move: ({ snow, d, extra }) => `${snow ? 'Snöskoter' : 'Gå'} ${d} steg${extra ? ' (midnattssolens bonus)' : ''} — tryck på en lysande ruta. Du får stanna tidigare i en stad.`,
+    st_ferryBroke: 'Du är pank: segla 2 steg gratis. Vart?',
+    st_ferry: ({ cost }) => `Gå ombord för ${cost} och slå sedan. Du stannar i första hamnen.`,
+    sb_route: ({ k, lake }) => `${k} steg${lake ? ' · sjö' : ''}`,
+    bt_back: 'Tillbaka',
+    st_train: ({ cost }) => `Välj en station (${cost}).`,
+    st_token: ({ city, gf, swamp }) => `En dold bricka ligger i ${city}` + (gf ? ' — guldfälten: skatten är värd dubbelt!' : swamp ? ' — myggträsk: en tom bricka kostar 3 turer.' : '.'),
+    bt_flipFree: '♨️ Vänd gratis', bt_flipPay: ({ cost }) => `🔍 Vänd för ${cost}`,
+    bt_leave: 'Fortsätt', sb_leave: 'Pröva lyckan nästa tur, eller res vidare',
+    st_sun: 'Midnattssol — ingen sömn behövs. Ta ett extra drag direkt!',
+    bt_sun: '☀️ Slå &amp; gå igen',
+    st_won: ({ n }) => `${n} hittade hem med Sampos magi. Spelet är slut.`,
+    bt_showWin: 'Visa resultat',
+    rv_turns: ({ n, place }) => `${n} vänder brickan i ${place}`,
+    continue: 'Fortsätt',
+    wn_title: ({ n }) => `${n} vinner!`,
+    wn_text: ({ n, sampo, city, r }) => `${n} förde ${sampo ? 'Sampo' : 'ett Sampofragment'} hem till ${city} i omgång ${r}.`,
+    wn_board: 'Titta på spelplanen',
+    close: 'Stäng', logTitle: 'Händelselogg',
+    ng_q: 'Starta ett nytt spel?', ng_text: 'Det pågående spelet går förlorat.', ng_go: 'Starta nytt spel',
+  },
 };
 
-const CITY_NAMES_FI = { mhm: 'Maarianhamina' };
-const cityName = id => (lang === 'fi' && CITY_NAMES_FI[id]) || NODES[id].name;
+const LANGS = ['en', 'fi', 'sv'];
+const CITY_NAMES = {
+  fi: { mhm: 'Maarianhamina' },
+  sv: {
+    hel: 'Helsingfors', tku: 'Åbo', tre: 'Tammerfors', por: 'Björneborg', vaa: 'Vasa', kok: 'Karleby',
+    lah: 'Lahtis', lpr: 'Villmanstrand', svl: 'Nyslott', mik: 'S:t Michel', kaj: 'Kajana',
+    oul: 'Uleåborg', hai: 'Karlö', ina: 'Enare',
+  },
+};
+const cityName = id => (CITY_NAMES[lang] && CITY_NAMES[lang][id]) || NODES[id].name;
 
 // Resolve message arguments: ids become names, amounts become money, nested messages get translated.
 function resolveArgs(a) {
@@ -623,7 +730,7 @@ function shuffle(a) {
   return a;
 }
 const d6 = () => 1 + Math.floor(Math.random() * 6);
-const euro = n => lang === 'fi' ? n.toLocaleString('fi-FI') + '\u00a0€' : '€' + n.toLocaleString('en-US');
+const euro = n => lang === 'en' ? '€' + n.toLocaleString('en-US') : n.toLocaleString('fi-FI') + '\u00a0€';
 const cur = () => S.players[S.current];
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -1321,12 +1428,34 @@ function rulesHtml() {
   const e = euro;
   const tokIcon = k => k === 'berries' ? '🟠' : TOKENS[k].icon;
   const fi = lang === 'fi';
-  const eff = fi
+  const eff = lang === 'sv'
+    ? { gold: '+' + e(1000), silver: '+' + e(600), berries: '+' + e(300), empty: 'Ingenting', louhi: 'Förlora alla pengar', hiisi: 'Förlora hälften av dina pengar',
+        fragment: 'Kasseras innan Sampo har hittats; en vinstbricka efteråt', sampo: 'För hem och vinn' }
+    : fi
     ? { gold: '+' + e(1000), silver: '+' + e(600), berries: '+' + e(300), empty: 'Ei mitään', louhi: 'Menetät kaikki rahasi', hiisi: 'Menetät puolet rahoistasi',
         fragment: 'Arvoton ennen kuin Sampo löytyy, sen jälkeen voittomerkki', sampo: 'Vie kotiin ja voitat' }
     : { gold: '+' + e(1000), silver: '+' + e(600), berries: '+' + e(300), empty: 'Nothing', louhi: 'Lose all money', hiisi: 'Lose half your money',
         fragment: 'Discarded before the Sampo is found; a winning token after', sampo: 'Carry home to win' };
   const tokRows = Object.keys(TOKENS).map(k => `<tr><td>${tokIcon(k)} ${t('tok_' + k)}</td><td>${eff[k]} <span style="color:var(--muted)">(×${TOKENS[k].n})</span></td></tr>`).join('');
+  if (lang === 'sv') return `<div class="rules"><h2>Så spelar du</h2>
+    <p>Tävla genom Finland för att hitta <b>Sampo</b> och föra det tillbaka till <b>Helsingfors</b> eller <b>Rovaniemi</b>. Alla börjar med ${e(START_MONEY)}.</p>
+    <h3>Resor</h3><table>
+      <tr><td>🥾 Väg</td><td>Gratis. Slå och flytta exakt så många steg, eller stanna tidigare i en stad. Ingen vändning bakåt.</td></tr>
+      <tr><td>⛴️ Färja</td><td>${e(COSTS.ferry)} för att gå ombord i en hamn. Slå för avstånd; du stannar i första hamnen. Panka spelare seglar 2 steg gratis. Öarna nås bara med färja.</td></tr>
+      <tr><td>🚆 Tåg</td><td>${e(COSTS.train)}. Direkt mellan två sammanlänkade stationer.</td></tr>
+      <tr><td>🛷 Snöskoter</td><td>${e(COSTS.snow)}. Bara i Lappland (norr om den streckade linjen). Slå och dubbla resultatet.</td></tr></table>
+    <h3>Brickor</h3><p>I en stad med en dold bricka (?) väljer du: betala ${e(COSTS.flip)} och vänd den, eller res vidare. Om du stannar kan du på en senare tur slå 4–6 och vända den gratis.</p>
+    <table>${tokRows}</table>
+    <h3>Specialrutor</h3><table>
+      <tr><td>❄️ Snöstorm</td><td>Du sitter fast tills du slår 1 eller 2.</td></tr>
+      <tr><td>🦟 Sodankylä</td><td>Myggträsk: en tom bricka här kostar 3 turer.</td></tr>
+      <tr><td>✨ Enare</td><td>Lemmenjokis guldfält: skatter som hittas här är värda dubbelt.</td></tr>
+      <tr><td>🎅 Korvatunturi</td><td>Den som kommer först får +${e(500)} av julgubben.</td></tr>
+      <tr><td>🌊 Östersjöstorm</td><td>Du sitter fast tills du slår 1 eller 2.</td></tr>
+      <tr><td>♨️ Bastu</td><td>Stå över en tur och vänd sedan en bricka gratis.</td></tr>
+      <tr><td>☀️ Midnattssol</td><td>Ta ett extra drag direkt.</td></tr>
+      <tr><td>🦌 Renar på vägen</td><td>Din förflyttning slutar här.</td></tr></table>
+    <h3>Vinst</h3><p>Den som först når Helsingfors eller Rovaniemi med Sampo — eller med ett Sampofragment efter att Sampo har hittats — vinner.</p></div>`;
   if (fi) return `<div class="rules"><h2>Näin pelaat</h2>
     <p>Kilpaile halki Suomen, etsi <b>Sampo</b> ja vie se takaisin <b>Helsinkiin</b> tai <b>Rovaniemelle</b>. Jokainen aloittaa ${e(START_MONEY)} rahalla.</p>
     <h3>Matkustaminen</h3><table>
@@ -1439,8 +1568,8 @@ document.getElementById('menubtn').addEventListener('click', () => {
   showSheet(`<h2>${t('ng_q')}</h2><p>${t('ng_text')}</p>
     <button class="primary" style="width:100%;margin-top:8px" data-act="newgame">${t('ng_go')}</button>`);
 });
-document.getElementById('langbtn').addEventListener('click', () => setLang(lang === 'fi' ? 'en' : 'fi'));
-document.getElementById('langbtn2').addEventListener('click', () => setLang(lang === 'fi' ? 'en' : 'fi'));
+document.getElementById('langbtn').addEventListener('click', () => setLang(LANGS[(LANGS.indexOf(lang) + 1) % LANGS.length]));
+document.getElementById('langseg').addEventListener('click', e => { const b = e.target.closest('[data-lang]'); if (b) setLang(b.dataset.lang); });
 
 // Static labels in the HTML carry data-i18n (text) or data-i18n-title (title + aria-label).
 function applyStaticText() {
@@ -1448,6 +1577,12 @@ function applyStaticText() {
   document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
   document.querySelectorAll('[data-i18n-title]').forEach(el => {
     el.title = t(el.dataset.i18nTitle); el.setAttribute('aria-label', el.title);
+  });
+  // Header button shows the current language and cycles EN → FI → SV
+  document.getElementById('langbtn').textContent = lang.toUpperCase();
+  document.querySelectorAll('#langseg [data-lang]').forEach(b => {
+    b.classList.toggle('on', b.dataset.lang === lang);
+    b.setAttribute('aria-pressed', b.dataset.lang === lang);
   });
 }
 
@@ -1481,8 +1616,8 @@ function renderSetup() {
       <button class="swatch" data-sw="${i}" style="background:${p.color}" aria-label="${t('changeColour')}"></button>
       <input id="pname${i}" data-name="${i}" value="${esc(p.name)}" maxlength="16" aria-label="${esc(t('playerN', { i: i + 1 }))}">
       <div class="startsel">
-        <button data-start="${i}" data-city="hel" class="${p.start === 'hel' ? 'on' : ''}">Helsinki</button>
-        <button data-start="${i}" data-city="rov" class="${p.start === 'rov' ? 'on' : ''}">Rovaniemi</button>
+        <button data-start="${i}" data-city="hel" class="${p.start === 'hel' ? 'on' : ''}">${esc(cityName('hel'))}</button>
+        <button data-start="${i}" data-city="rov" class="${p.start === 'rov' ? 'on' : ''}">${esc(cityName('rov'))}</button>
       </div>
     </div>`).join('');
   const sel = document.getElementById('firstsel');

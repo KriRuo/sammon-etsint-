@@ -36,7 +36,7 @@ The rules engine enforces everything in the spec:
 
 ## Decisions on the open questions (easy to change)
 
-- **Language:** Finnish and English, switched with the FI/EN button in the header or on the setup screen. The first visit follows the phone's language, and the choice is remembered. Switching mid-game also retranslates the turn log and any open pop-up. All text lives in the `STR` table in `index.html`.
+- **Language:** English, Finnish and Swedish. Switch with the EN/FI/SV selector on the setup screen, or tap the language button in the game's top bar to cycle through them. The first visit follows the phone's language, and the choice is remembered. In Swedish, cities use their Swedish names (Helsingfors, Åbo, Uleåborg…). Switching mid-game also retranslates the turn log and any open pop-up. All text lives in the `STR` table in `index.html`.
 - **Name:** *Sammon etsintä*.
 - **Finish cities:** Helsinki and Rovaniemi, as in the spec.
 - **Snowmobile:** kept. It makes Lapland worth the trip.
