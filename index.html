@@ -1,0 +1,1738 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e2233">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="description" content="Sammon etsintä — a Finnish Afrikan tähti. Race across Finland to find the Sampo.">
+<title>Sammon etsintä</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+:root {
+  --bg: #0e2233;
+  --panel: #16324a;
+  --panel-2: #1e4260;
+  --ink: #f3efe4;
+  --muted: #a9bccb;
+  --accent: #f2c14e;
+  --accent-ink: #2a1d00;
+  --danger: #e0645a;
+  --sea: #7fb0d3;
+  --land: #e9e2c9;
+  --land-edge: #b9ad86;
+  --road: #8b6b4a;
+  --label: #2c2418;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font: 15px/1.35 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+button {
+  font: inherit; color: inherit; cursor: pointer;
+  border: 0; border-radius: 10px; padding: 10px 14px;
+  background: var(--panel-2);
+  touch-action: manipulation;
+}
+button:disabled { opacity: .4; cursor: default; }
+button.primary { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+button.ghost { background: transparent; border: 1px solid #ffffff33; }
+button.icon { padding: 6px 10px; font-size: 18px; background: transparent; }
+.hidden { display: none !important; }
+
+/* ---------- Game layout ---------- */
+#game { display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+header {
+  display: flex; align-items: center; gap: 4px;
+  padding: calc(env(safe-area-inset-top) + 4px) 8px 4px 12px;
+  background: var(--panel);
+}
+header h1 { font-size: 17px; line-height: 1.15; margin: 0; flex: 1; min-width: 0; letter-spacing: .3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+header h1 small { display: block; color: var(--muted); font-weight: 400; font-size: 12px; letter-spacing: 0; }
+#players { display: flex; gap: 6px; overflow-x: auto; padding: 6px 8px; background: var(--panel); border-bottom: 1px solid #ffffff14; }
+.pchip {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 6px;
+  padding: 4px 9px 4px 6px; border-radius: 999px; background: #ffffff0d;
+  font-size: 13px; white-space: nowrap; border: 2px solid transparent;
+}
+.pchip.current { border-color: var(--accent); background: #f2c14e22; }
+.pchip .dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #fff; }
+.pchip .money { color: var(--accent); font-variant-numeric: tabular-nums; }
+#mapwrap { flex: 1; overflow: auto; background: var(--sea); position: relative; }
+#map { display: block; width: 100%; height: auto; }
+#mapwrap.zoom #map { width: 190%; }
+
+#panel {
+  background: var(--panel); padding: 10px 12px calc(env(safe-area-inset-bottom) + 10px);
+  border-top: 1px solid #ffffff14;
+}
+#turnline { display: flex; align-items: center; gap: 10px; }
+#turnline .who { font-weight: 700; font-size: 16px; }
+#turnline .who .dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 6px; border: 2px solid #fff; vertical-align: -1px; }
+#status { color: var(--muted); font-size: 13.5px; margin: 2px 0 8px; min-height: 18px; }
+#actions { display: flex; flex-wrap: wrap; gap: 8px; }
+#actions button { flex: 1 1 calc(50% - 8px); min-height: 44px; }
+#actions button.wide { flex-basis: 100%; }
+#actions button small { display: block; font-size: 11.5px; font-weight: 400; opacity: .8; }
+#loglines { margin-top: 8px; font-size: 12.5px; color: var(--muted); cursor: pointer; }
+#loglines div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#loglines b { color: var(--ink); font-weight: 600; }
+
+/* Die */
+.die {
+  width: 44px; height: 44px; border-radius: 9px; background: #fff; margin-left: auto;
+  display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr); padding: 6px;
+  box-shadow: 0 2px 0 #0004 inset, 0 2px 6px #0006; flex: 0 0 auto;
+}
+.die i { width: 8px; height: 8px; border-radius: 50%; background: transparent; place-self: center; }
+.die i.on { background: #1b1b1b; }
+.die.blank i { background: transparent !important; }
+.die.rolling { animation: shake .12s linear infinite; }
+@keyframes shake { 0% { transform: rotate(-8deg); } 50% { transform: rotate(8deg); } 100% { transform: rotate(-8deg); } }
+
+/* Map pieces */
+.lbl { font-size: 9.5px; font-weight: 600; fill: var(--label); paint-order: stroke; stroke: var(--land); stroke-width: 2.6px; stroke-linejoin: round; pointer-events: none; }
+.lbl.finish { font-size: 11px; font-weight: 800; }
+.lbl.sea { stroke: var(--sea); }
+.target-ring { fill: #f2c14e55; stroke: #c98a00; stroke-width: 2; animation: pulse 1s ease-in-out infinite; transform-box: fill-box; transform-origin: center; pointer-events: none; }
+@keyframes pulse { 50% { transform: scale(1.3); opacity: .6; } }
+.hit { fill: transparent; cursor: pointer; }
+.pawn { transition: transform .17s ease-in-out; pointer-events: none; }
+.pawn.active circle { stroke: var(--accent); stroke-width: 2.4; }
+
+/* ---------- Overlays ---------- */
+.overlay {
+  position: fixed; inset: 0; background: #06121cdd; display: flex;
+  align-items: center; justify-content: center; padding: 16px; z-index: 10;
+}
+.card {
+  background: var(--panel); border-radius: 16px; padding: 18px; width: 100%; max-width: 420px;
+  max-height: 100%; overflow: auto; box-shadow: 0 10px 40px #0008;
+}
+.card h2 { margin: 0 0 8px; font-size: 20px; }
+.card p { margin: 6px 0; }
+.reveal { text-align: center; }
+.reveal .big { font-size: 64px; line-height: 1.1; margin: 6px 0; }
+.reveal .big svg { width: 70px; height: 70px; }
+.reveal .effect { font-size: 18px; font-weight: 700; color: var(--accent); }
+.reveal .bad { color: var(--danger); }
+.reveal button { width: 100%; margin-top: 12px; }
+.rules h3 { margin: 14px 0 4px; font-size: 15px; color: var(--accent); }
+.rules table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.rules td { padding: 4px 4px; border-bottom: 1px solid #ffffff14; vertical-align: top; }
+.rules td:first-child { white-space: nowrap; font-weight: 600; }
+.rules ul { padding-left: 18px; margin: 4px 0; font-size: 13.5px; }
+.log-list { font-size: 13px; }
+.log-list div { padding: 4px 0; border-bottom: 1px solid #ffffff10; }
+.close-row { display: flex; justify-content: flex-end; margin-top: 12px; }
+
+/* ---------- Setup ---------- */
+#setup { min-height: 100%; padding: calc(env(safe-area-inset-top) + 16px) 16px 24px; max-width: 520px; margin: 0 auto; }
+#setup h1 { margin: 8px 0 0; font-size: 30px; }
+.setup-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.langseg { display: flex; flex: 0 0 auto; border: 1px solid #ffffff33; border-radius: 9px; overflow: hidden; }
+.langseg button { border-radius: 0; background: transparent; padding: 8px 11px; font-size: 13px; font-weight: 700; letter-spacing: .5px; }
+.langseg button.on { background: var(--accent); color: var(--accent-ink); }
+button.icon.lang { font-size: 13px; font-weight: 800; letter-spacing: .5px; border: 1px solid #ffffff44; border-radius: 8px; padding: 4px 8px; margin-right: 4px; }
+#setup .tag { color: var(--muted); margin: 2px 0 18px; }
+.field-label { font-size: 13px; color: var(--muted); margin: 14px 0 6px; }
+.stepper { display: flex; align-items: center; gap: 12px; }
+.stepper button { width: 44px; height: 44px; font-size: 22px; padding: 0; }
+.stepper output { font-size: 22px; font-weight: 700; min-width: 20px; text-align: center; }
+.prow { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; background: #ffffff0a; padding: 8px; border-radius: 12px; }
+.prow input {
+  flex: 1; min-width: 0; font: inherit; color: var(--ink); background: #0006;
+  border: 1px solid #ffffff22; border-radius: 8px; padding: 9px 10px;
+}
+.swatch { width: 36px; height: 36px; border-radius: 50%; border: 3px solid #fff; padding: 0; flex: 0 0 auto; }
+.startsel { display: flex; border-radius: 8px; overflow: hidden; flex: 0 0 auto; }
+.startsel button { border-radius: 0; padding: 9px 8px; font-size: 12.5px; background: #0005; }
+.startsel button.on { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+select {
+  font: inherit; color: var(--ink); background: #0006; border: 1px solid #ffffff22;
+  border-radius: 8px; padding: 9px 10px; width: 100%;
+}
+#setup .go { width: 100%; margin-top: 20px; min-height: 52px; font-size: 17px; }
+#setup .resume { width: 100%; margin-top: 10px; }
+.win { text-align: center; }
+.win .big { font-size: 72px; }
+</style>
+</head>
+<body>
+
+<!-- Setup screen -->
+<section id="setup" class="hidden">
+  <div class="setup-top"><h1>Sammon etsintä</h1><div class="langseg" id="langseg" role="group" data-i18n-title="langTitle"><button data-lang="en">EN</button><button data-lang="fi">FI</button><button data-lang="sv">SV</button></div></div>
+  <p class="tag" data-i18n="tagline">Race across Finland, find the Sampo, carry it home to Helsinki or Rovaniemi.</p>
+
+  <div class="field-label" data-i18n="players">Players</div>
+  <div class="stepper">
+    <button id="pminus" data-i18n-title="fewer">−</button>
+    <output id="pcount">2</output>
+    <button id="pplus" data-i18n-title="more">+</button>
+  </div>
+
+  <div class="field-label" data-i18n="setupRows">Names, colours and starting city</div>
+  <div id="prows"></div>
+
+  <div class="field-label" data-i18n="firstPlayer">Starting player</div>
+  <select id="firstsel"></select>
+
+  <button class="primary go" id="startbtn" data-i18n="startHunt">Start the hunt</button>
+  <button class="ghost resume hidden" id="backbtn" data-i18n="backToGame">Back to current game</button>
+  <button class="ghost resume" id="rulesbtn2" data-i18n="rules">Rules</button>
+</section>
+
+<!-- Game screen -->
+<section id="game" class="hidden">
+  <header>
+    <h1>Sammon etsintä <small id="turnno"></small></h1>
+    <button class="icon lang" id="langbtn" data-i18n-title="langTitle">EN</button>
+    <button class="icon" id="zoombtn" data-i18n-title="zoom">🔍</button>
+    <button class="icon" id="rulesbtn" data-i18n-title="rules">📜</button>
+    <button class="icon" id="menubtn" data-i18n-title="newGame">⟲</button>
+  </header>
+  <div id="players"></div>
+  <div id="mapwrap"><svg id="map" viewBox="0 0 400 760" xmlns="http://www.w3.org/2000/svg" aria-label="Map of Finland"></svg></div>
+  <div id="panel">
+    <div id="turnline"><div class="who" id="who"></div><div class="die blank" id="die"></div></div>
+    <div id="status"></div>
+    <div id="actions"></div>
+    <div id="loglines" title="Show full log"></div>
+  </div>
+</section>
+
+<div id="overlay" class="overlay hidden"><div class="card" id="card"></div></div>
+
+<script>
+'use strict';
+
+/* =====================================================================
+   Board data
+   Coordinates are lon/lat projected onto a 400×760 board.
+   ===================================================================== */
+const P = (lon, lat) => [Math.round(14 + (lon - 19.5) * 31), Math.round(20 + (70.1 - lat) * 70)];
+
+// id, name, lon, lat, flags. lab = label side (r default, l, t, b).
+const CITY_DEFS = [
+  ['hel', 'Helsinki',     24.94, 60.17, { finish: 1, harbour: 1, station: 1, lab: 'b' }],
+  ['tku', 'Turku',        22.27, 60.45, { harbour: 1, station: 1, lab: 'b' }],
+  ['mhm', 'Mariehamn',    19.94, 60.10, { harbour: 1, island: 1, lab: 'b' }],
+  ['tre', 'Tampere',      23.76, 61.50, { station: 1 }],
+  ['por', 'Pori',         21.80, 61.48, { harbour: 1, lab: 'l' }],
+  ['vaa', 'Vaasa',        21.62, 63.10, { harbour: 1, station: 1, lab: 'l' }],
+  ['sei', 'Seinäjoki',    22.84, 62.79, {}],
+  ['kok', 'Kokkola',      23.13, 63.84, {}],
+  ['jkl', 'Jyväskylä',    25.75, 62.24, { harbour: 1 }],
+  ['lah', 'Lahti',        25.66, 60.98, { harbour: 1, lab: 'l' }],
+  ['kou', 'Kouvola',      26.70, 60.87, { station: 1, lab: 'b' }],
+  ['lpr', 'Lappeenranta', 28.19, 61.06, { harbour: 1, lab: 'b' }],
+  ['svl', 'Savonlinna',   28.88, 61.87, { harbour: 1 }],
+  ['mik', 'Mikkeli',      27.27, 61.69, { harbour: 1, lab: 'l' }],
+  ['kuo', 'Kuopio',       27.68, 62.89, { harbour: 1, station: 1, lab: 'l' }],
+  ['joe', 'Joensuu',      29.76, 62.60, { harbour: 1, station: 1, lab: 't' }],
+  ['kaj', 'Kajaani',      27.73, 64.22, { station: 1 }],
+  ['oul', 'Oulu',         25.60, 65.01, { harbour: 1, station: 1 }],
+  ['hai', 'Hailuoto',     24.40, 65.02, { harbour: 1, island: 1, lab: 'l' }],
+  ['kem', 'Kemi',         24.56, 65.74, { harbour: 1, lab: 'l' }],
+  ['rov', 'Rovaniemi',    25.73, 66.50, { finish: 1, station: 1 }],
+  ['kuu', 'Kuusamo',      29.18, 65.96, {}],
+  ['sod', 'Sodankylä',    26.59, 67.42, { swamp: 1, lab: 'l' }],
+  ['ina', 'Inari',        27.03, 68.91, { goldfield: 1, lab: 'l' }],
+  ['uts', 'Utsjoki',      27.03, 69.83, {}],
+  ['kil', 'Kilpisjärvi',  20.79, 69.05, { lab: 'b' }],
+  ['kor', 'Korvatunturi', 28.90, 67.95, { korva: 1, notoken: 1, lab: 'b' }],
+];
+
+// Road links: [a, b, intermediate steps, { sp: { stepIndex: special }, via: [lon, lat] }]
+const ROAD_DEFS = [
+  ['hel', 'tku', 2], ['hel', 'lah', 1], ['hel', 'tre', 3],
+  ['tku', 'por', 2], ['tku', 'tre', 2], ['por', 'tre', 1], ['por', 'vaa', 3],
+  ['tre', 'sei', 2], ['vaa', 'sei', 1], ['tre', 'jkl', 2, { sp: { 0: 'sauna' } }],
+  ['sei', 'jkl', 2], ['vaa', 'kok', 2], ['sei', 'kok', 2],
+  ['kok', 'oul', 3, { sp: { 1: 'sauna' } }],
+  ['lah', 'jkl', 2], ['lah', 'kou', 0], ['kou', 'lpr', 1], ['kou', 'mik', 1],
+  ['lpr', 'svl', 1], ['mik', 'svl', 1], ['mik', 'kuo', 2, { sp: { 1: 'sauna' } }],
+  ['jkl', 'kuo', 2], ['svl', 'joe', 1], ['kuo', 'joe', 1], ['kuo', 'kaj', 2],
+  ['joe', 'kaj', 3], ['kaj', 'oul', 2], ['kaj', 'kuu', 3, { sp: { 1: 'reindeer' } }],
+  ['oul', 'kem', 1], ['kem', 'rov', 1],
+  ['rov', 'kuu', 3, { sp: { 1: 'reindeer' } }],
+  ['rov', 'sod', 2, { sp: { 0: 'sun' } }],
+  ['sod', 'kor', 2, { sp: { 0: 'reindeer' } }],
+  ['sod', 'ina', 3, { sp: { 1: 'blizzard' } }],
+  ['ina', 'uts', 2, { sp: { 0: 'sun' } }],
+  ['rov', 'kil', 7, { via: [23.3, 68.0], sp: { 1: 'reindeer', 3: 'blizzard', 5: 'sun' } }],
+];
+
+// Ferry routes (sea and lake): [a, b, intermediate steps, { via, sp }]
+const SEA_DEFS = [
+  ['hel', 'tku', 3, { via: [23.4, 59.7] }],
+  ['tku', 'mhm', 3, { via: [21.0, 60.0], sp: { 1: 'storm' } }],
+  ['mhm', 'por', 3, { via: [20.5, 61.1], sp: { 1: 'storm' } }],
+  ['por', 'vaa', 3, { via: [20.7, 62.3] }],
+  ['vaa', 'hai', 4, { via: [22.6, 64.3] }],
+  ['hai', 'oul', 0],
+  ['hai', 'kem', 1, { via: [24.2, 65.4] }],
+  // Päijänne
+  ['lah', 'jkl', 2, { via: [25.45, 61.6], lake: 1 }],
+  // Saimaa
+  ['lpr', 'svl', 1, { via: [28.4, 61.4], lake: 1 }],
+  ['mik', 'svl', 1, { via: [28.0, 61.85], lake: 1 }],
+  ['svl', 'joe', 1, { via: [29.3, 62.25], lake: 1 }],
+  ['svl', 'kuo', 2, { via: [28.3, 62.45], lake: 1 }],
+];
+
+const RAIL_DEFS = [
+  ['hel', 'tku'], ['hel', 'tre'], ['hel', 'kou'], ['kou', 'kuo'], ['kou', 'joe'],
+  ['tre', 'vaa'], ['tre', 'oul'], ['kuo', 'kaj'], ['kaj', 'oul'], ['oul', 'rov'],
+];
+
+const SPECIALS = {
+  blizzard: { icon: '❄️', name: 'Lapland blizzard' },
+  sun:      { icon: '☀️', name: 'Midnight sun' },
+  reindeer: { icon: '🦌', name: 'Reindeer crossing' },
+  sauna:    { icon: '♨️', name: 'Sauna' },
+  storm:    { icon: '🌊', name: 'Baltic storm' },
+};
+
+const CLOUDBERRY_SVG = '<svg viewBox="0 0 40 40" aria-hidden="true"><path d="M20 6 L14 12 L20 11 L26 12 Z M20 11 L12 10 M20 11 L28 10" fill="#3f8a3a" stroke="#3f8a3a" stroke-width="2" stroke-linejoin="round"/>' +
+  [[20, 16], [14, 20], [26, 20], [20, 22], [15, 27], [25, 27], [20, 30], [11, 25], [29, 25]]
+    .map(([x, y]) => `<circle cx="${x}" cy="${y}" r="5" fill="#f19a2e" stroke="#c96c10" stroke-width="1"/>`).join('') + '</svg>';
+
+const TOKENS = {
+  gold:     { n: 3, name: 'Lemmenjoki gold', icon: '🪙', value: 1000 },
+  silver:   { n: 4, name: 'Silver',          icon: '🥈', value: 600 },
+  berries:  { n: 5, name: 'Cloudberries',    icon: CLOUDBERRY_SVG, value: 300 },
+  empty:    { n: 6, name: 'Empty',           icon: '🍂' },
+  louhi:    { n: 2, name: 'Louhi',           icon: '🧙‍♀️' },
+  hiisi:    { n: 1, name: 'Hiisi',           icon: '👹' },
+  fragment: { n: 2, name: 'Sampo fragment',  icon: '🧩' },
+  sampo:    { n: 1, name: 'The Sampo',       icon: '🌟' },
+};
+
+const COLORS = ['#d8433b', '#2f6fd6', '#2e9e57', '#e8b923', '#8e4fc9', '#ee7b22', '#18a6a6', '#e35d9f'];
+const COSTS = { flip: 100, ferry: 100, train: 300, snow: 200 };
+const START_MONEY = 300;
+const SAVE_KEY = 'sammon-etsinta:v1';
+
+/* ---------- Build the graph ---------- */
+const NODES = {};      // id -> { id, kind: city|step|sea, x, y, ... }
+const ROAD = {};       // id -> [neighbour ids]
+const SEA_ROUTES = []; // [ [a, ...seaSteps, b], ... ] with .lake flag
+const RAIL = {};       // id -> [station ids]
+
+function addNode(n) { n.lap = n.y <= 290; NODES[n.id] = n; ROAD[n.id] = ROAD[n.id] || []; RAIL[n.id] = RAIL[n.id] || []; }
+function linkRoad(a, b) { ROAD[a].push(b); ROAD[b].push(a); }
+function curvePoint(a, b, via, t) {
+  if (!via) return [a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t];
+  const [vx, vy] = P(via[0], via[1]), u = 1 - t;
+  return [u * u * a.x + 2 * u * t * vx + t * t * b.x, u * u * a.y + 2 * u * t * vy + t * t * b.y];
+}
+
+for (const [id, name, lon, lat, f] of CITY_DEFS) {
+  const [x, y] = P(lon, lat);
+  addNode({ id, kind: 'city', name, x, y, ...f });
+}
+for (const [a, b, n, opt = {}] of ROAD_DEFS) {
+  let prev = a;
+  for (let i = 0; i < n; i++) {
+    const [x, y] = curvePoint(NODES[a], NODES[b], opt.via, (i + 1) / (n + 1));
+    const id = `${a}-${b}-${i}`;
+    addNode({ id, kind: 'step', x, y, special: opt.sp && opt.sp[i] });
+    linkRoad(prev, id); prev = id;
+  }
+  linkRoad(prev, b);
+}
+for (const [a, b, n, opt = {}] of SEA_DEFS) {
+  const route = [a];
+  for (let i = 0; i < n; i++) {
+    const [x, y] = curvePoint(NODES[a], NODES[b], opt.via, (i + 1) / (n + 1));
+    const id = `sea-${a}-${b}-${i}`;
+    addNode({ id, kind: 'sea', x, y, special: opt.sp && opt.sp[i], lake: !!opt.lake });
+    route.push(id);
+  }
+  route.push(b);
+  route.lake = !!opt.lake;
+  route.via = opt.via;
+  SEA_ROUTES.push(route);
+}
+for (const [a, b] of RAIL_DEFS) { RAIL[a].push(b); RAIL[b].push(a); }
+
+const TOKEN_CITIES = CITY_DEFS.filter(c => !c[4].finish && !c[4].notoken).map(c => c[0]);
+const isFinish = id => !!NODES[id].finish;
+
+/* =====================================================================
+   Language: English / Finnish
+   Messages are stored as { k, a } and translated when rendered, so the
+   log and pop-ups switch language along with the rest of the UI.
+   ===================================================================== */
+const LANG_KEY = 'sammon-etsinta:lang';
+let lang = (() => {
+  try { const l = localStorage.getItem(LANG_KEY); if (['en', 'fi', 'sv'].includes(l)) return l; } catch (e) { /* storage unavailable */ }
+  const nav = (navigator.language || '').toLowerCase();
+  return nav.startsWith('fi') ? 'fi' : nav.startsWith('sv') ? 'sv' : 'en';
+})();
+
+const steps = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+
+const STR = {
+  en: {
+    tagline: 'Race across Finland, find the Sampo, carry it home to Helsinki or Rovaniemi.',
+    players: 'Players', setupRows: 'Names, colours and starting city', firstPlayer: 'Starting player',
+    startHunt: 'Start the hunt', backToGame: 'Back to current game', rules: 'Rules', random: 'Random',
+    playerN: ({ i }) => `Player ${i}`, fewer: 'Fewer players', more: 'More players', changeColour: 'Change colour',
+    zoom: 'Zoom', newGame: 'New game', langTitle: 'Language',
+    round: ({ r }) => `Round ${r}`,
+    // map
+    mapLapland: '▲ Lapland · snowmobile country', mapBothnia: 'Gulf of Bothnia', mapGulf: 'Gulf of Finland',
+    openWater: 'open water', theRoad: 'the road',
+    // specials & tokens
+    sp_blizzard: 'Lapland blizzard', sp_sun: 'Midnight sun', sp_reindeer: 'Reindeer crossing', sp_sauna: 'Sauna', sp_storm: 'Baltic storm',
+    tok_gold: 'Lemmenjoki gold', tok_silver: 'Silver', tok_berries: 'Cloudberries', tok_empty: 'Empty',
+    tok_louhi: 'Louhi', tok_hiisi: 'Hiisi', tok_fragment: 'Sampo fragment', tok_sampo: 'The Sampo',
+    reason_sauna: 'sauna', reason_mosquitoes: 'mosquitoes',
+    // log
+    lg_start: ({ n }) => `The hunt begins! ${n} goes first.`,
+    lg_snow: ({ n, cost, v, d }) => `${n} fires up a snowmobile (−${cost}) and rolls ${v} → ${d} steps.`,
+    lg_rolls: ({ n, v }) => `${n} rolls ${v}.`,
+    lg_rollsSea: ({ n, v }) => `${n} rolls ${v} at sea.`,
+    lg_nowhere: ({ n }) => `${n} has nowhere to go.`,
+    lg_ferryFree: ({ n, dest }) => `${n} is broke and hitches a free ride towards ${dest} (2 steps).`,
+    lg_ferry: ({ n, dest, cost }) => `${n} boards the ferry to ${dest} (−${cost}).`,
+    lg_drift: ({ n }) => `${n} drifts on (2 free steps).`,
+    lg_docks: ({ n, city }) => `${n} docks at ${city}.`,
+    lg_storm: ({ n }) => `🌊 Baltic storm! ${n} is stuck until they roll 1 or 2.`,
+    lg_escape: ({ n, v, storm }) => `${n} rolls ${v} and breaks free of the ${storm ? 'storm' : 'blizzard'}!`,
+    lg_stuck: ({ n, v, storm }) => `${n} rolls ${v} — still stuck in the ${storm ? 'storm' : 'blizzard'}.`,
+    lg_train: ({ n, city, cost }) => `${n} takes the train to ${city} (−${cost}).`,
+    lg_luckYes: ({ n, v }) => `${n} rolls ${v} — lucky! The token is turned for free.`,
+    lg_luckNo: ({ n, v }) => `${n} rolls ${v} — no luck with the token.`,
+    lg_freeFlip: ({ n }) => `${n} uses their sauna-fresh free flip.`,
+    lg_payFlip: ({ n, cost }) => `${n} pays ${cost} to turn the token.`,
+    lg_leave: ({ n }) => `${n} leaves the token for now.`,
+    lg_skip: ({ n, reason }) => `${n} skips a turn (${reason}).`,
+    lg_blizzard: ({ n }) => `❄️ Lapland blizzard! ${n} is stuck until they roll 1 or 2.`,
+    lg_sauna: ({ n }) => `♨️ ${n} stops for a sauna: skip a turn, then flip a token for free.`,
+    lg_reindeer: ({ n }) => `🦌 Reindeer on the road — ${n}'s move ends here.`,
+    lg_sun: ({ n }) => `☀️ Midnight sun! ${n} doesn't need sleep and moves again.`,
+    lg_korva: ({ n, amt }) => `🎅 ${n} is first to Korvatunturi — Santa hands over ${amt}!`,
+    lg_korvaLate: ({ n }) => `🎅 Santa waves at ${n}, but his gift is already given.`,
+    lg_turned: ({ n, city, tok, effect }) => `${n} turns the token in ${city}: ${tok}. ${effect}.`,
+    lg_win: ({ n, sampo, city }) => `🏆 ${n} brings ${sampo ? 'the Sampo' : 'a Sampo fragment'} home to ${city} and wins!`,
+    // token effects & flavour
+    ef_money: ({ amt, gf }) => `+${amt}` + (gf ? ' (gold fields: double!)' : ''),
+    ef_lose3: 'Lose 3 turns', ef_nothing: 'Nothing',
+    ef_loseAll: ({ amt }) => `Lose all your money (−${amt})`,
+    ef_loseHalf: ({ amt }) => `Lose half your money (−${amt})`,
+    ef_fragWin: 'A winning token! Carry it home.', ef_fragBin: 'Worthless — discarded',
+    ef_sampo: 'Carry it to Helsinki or Rovaniemi to win!',
+    fl_gold: 'A nugget glints in the Lemmenjoki river.',
+    fl_silver: 'An old silver brooch turns up under a birch root.',
+    fl_berries: 'A whole bog of cloudberries — a fortune at the market.',
+    fl_swamp: 'Nothing here — except the mosquitoes. They find you.',
+    fl_empty: 'Just moss, a few lingonberry leaves and one confused mosquito.',
+    fl_louhi: 'Louhi, Mistress of Pohjola, takes every euro you have.',
+    fl_hiisi: 'A hiisi grabs your purse and vanishes into the spruce forest.',
+    fl_fragWin: 'With the Sampo found, even a fragment of it carries its magic.',
+    fl_fragBin: 'A piece of the Sampo… but no magic until the Sampo itself is found.',
+    fl_sampo: 'The magic mill of the Kalevala — it grinds out grain, salt and gold.',
+    // panel
+    st_skipSauna: 'Relaxing in the sauna — this turn is skipped.',
+    st_skipMosq: ({ k }) => `Fighting off mosquitoes — ${k} turn${k > 1 ? 's' : ''} left to skip.`,
+    bt_skip: 'Skip turn',
+    st_storm: 'Stuck in a Baltic storm. Roll 1 or 2 to sail on.',
+    st_blizzard: 'Snowed in by a blizzard. Roll 1 or 2 to break free.',
+    bt_escape: 'Roll to escape', sb_escape: 'Need 1 or 2',
+    st_atSea: ({ dest }) => `At sea, heading for ${dest}.`,
+    bt_sail: 'Sail on', sb_sailFree: 'Free ride: 2 steps', sb_sailRoll: 'Roll for distance',
+    st_in: ({ place, isCity }) => `${isCity ? 'In' : 'On'} ${place}.`,
+    st_turned: ' Token already turned.', st_hidden: ' A hidden token lies here.',
+    st_carry: ({ sampo }) => ` You carry ${sampo ? 'the Sampo' : 'a winning fragment'} — get it home!`,
+    bt_walk: '🥾 Roll &amp; walk', sb_walk: 'Road · free', sb_island: 'No road — island',
+    bt_ferry: '⛴️ Ferry', sb_ferryBroke: 'Broke: 2 steps free', sb_ferry: ({ cost }) => `${cost} · roll`,
+    bt_train: '🚆 Train',
+    bt_snow: '🛷 Snowmobile', sb_snow: ({ cost }) => `${cost} · roll ×2`,
+    bt_luck: '🎲 Try luck', sb_luck: 'Roll 4–6: free flip',
+    bt_freeFlip: '♨️ Free flip', sb_sauna: 'Sauna reward', bt_flip: '🔍 Flip token',
+    st_moving: 'Moving…',
+    st_move: ({ snow, d, extra }) => `${snow ? 'Snowmobile' : 'Walk'} ${steps(d, 'step', 'steps')}${extra ? ' (midnight sun bonus)' : ''} — tap a glowing space. You may stop early at a city.`,
+    st_ferryBroke: 'You are broke: sail 2 steps for free. Where to?',
+    st_ferry: ({ cost }) => `Board for ${cost}, then roll. You stop at the first harbour.`,
+    sb_route: ({ k, lake }) => `${steps(k, 'step', 'steps')}${lake ? ' · lake' : ''}`,
+    bt_back: 'Back',
+    st_train: ({ cost }) => `Pick a station (${cost}).`,
+    st_token: ({ city, gf, swamp }) => `A hidden token lies in ${city}` + (gf ? ' — gold fields: treasure is worth double!' : swamp ? ' — mosquito swamp: an empty token costs 3 turns.' : '.'),
+    bt_flipFree: '♨️ Flip for free', bt_flipPay: ({ cost }) => `🔍 Flip for ${cost}`,
+    bt_leave: 'Carry on', sb_leave: 'Try your luck next turn, or move on',
+    st_sun: 'Midnight sun — no need to sleep. Take an extra move right away!',
+    bt_sun: '☀️ Roll &amp; walk again',
+    st_won: ({ n }) => `${n} found the way home with the Sampo magic. Game over.`,
+    bt_showWin: 'Show result',
+    // overlays
+    rv_turns: ({ n, place }) => `${n} turns the token in ${place}`,
+    continue: 'Continue',
+    wn_title: ({ n }) => `${n} wins!`,
+    wn_text: ({ n, sampo, city, r }) => `${n} carried ${sampo ? 'the Sampo' : 'a Sampo fragment'} home to ${city} in round ${r}.`,
+    wn_board: 'Look at the board',
+    close: 'Close', logTitle: 'Turn log',
+    ng_q: 'Start a new game?', ng_text: 'The current game will be lost.', ng_go: 'Start new game',
+  },
+
+  fi: {
+    tagline: 'Kilpaile halki Suomen, etsi Sampo ja vie se kotiin Helsinkiin tai Rovaniemelle.',
+    players: 'Pelaajat', setupRows: 'Nimet, värit ja lähtökaupunki', firstPlayer: 'Aloittaja',
+    startHunt: 'Aloita etsintä', backToGame: 'Takaisin peliin', rules: 'Säännöt', random: 'Satunnainen',
+    playerN: ({ i }) => `Pelaaja ${i}`, fewer: 'Vähemmän pelaajia', more: 'Lisää pelaajia', changeColour: 'Vaihda väriä',
+    zoom: 'Suurenna', newGame: 'Uusi peli', langTitle: 'Kieli',
+    round: ({ r }) => `Kierros ${r}`,
+    mapLapland: '▲ Lappi · moottorikelkkamaata', mapBothnia: 'Pohjanlahti', mapGulf: 'Suomenlahti',
+    openWater: 'avomeri', theRoad: 'tie',
+    sp_blizzard: 'Lapin lumimyrsky', sp_sun: 'Yötön yö', sp_reindeer: 'Poroja tiellä', sp_sauna: 'Sauna', sp_storm: 'Itämeren myrsky',
+    tok_gold: 'Lemmenjoen kulta', tok_silver: 'Hopea', tok_berries: 'Hillat', tok_empty: 'Tyhjä',
+    tok_louhi: 'Louhi', tok_hiisi: 'Hiisi', tok_fragment: 'Sammon sirpale', tok_sampo: 'Sampo',
+    reason_sauna: 'sauna', reason_mosquitoes: 'hyttyset',
+    lg_start: ({ n }) => `Etsintä alkaa! ${n} aloittaa.`,
+    lg_snow: ({ n, cost, v, d }) => `${n} käynnistää moottorikelkan (−${cost}) ja heittää ${v} → ${d} askelta.`,
+    lg_rolls: ({ n, v }) => `${n} heittää ${v}.`,
+    lg_rollsSea: ({ n, v }) => `${n} heittää merellä ${v}.`,
+    lg_nowhere: ({ n }) => `${n} ei pääse minnekään.`,
+    lg_ferryFree: ({ n, dest }) => `${n} on rahaton ja pääsee ilmaiseksi kyytiin, suuntana ${dest} (2 askelta).`,
+    lg_ferry: ({ n, dest, cost }) => `${n} nousee lauttaan, suuntana ${dest} (−${cost}).`,
+    lg_drift: ({ n }) => `${n} ajelehtii eteenpäin (2 ilmaista askelta).`,
+    lg_docks: ({ n, city }) => `${n} rantautuu: ${city}.`,
+    lg_storm: ({ n }) => `🌊 Itämeren myrsky! ${n} on jumissa, kunnes heittää 1 tai 2.`,
+    lg_escape: ({ n, v, storm }) => `${n} heittää ${v} ja pääsee irti ${storm ? 'myrskystä' : 'lumimyrskystä'}!`,
+    lg_stuck: ({ n, v, storm }) => `${n} heittää ${v} — yhä jumissa ${storm ? 'myrskyssä' : 'lumimyrskyssä'}.`,
+    lg_train: ({ n, city, cost }) => `${n} matkustaa junalla: ${city} (−${cost}).`,
+    lg_luckYes: ({ n, v }) => `${n} heittää ${v} — onnisti! Merkki käännetään ilmaiseksi.`,
+    lg_luckNo: ({ n, v }) => `${n} heittää ${v} — ei onnea merkin kanssa.`,
+    lg_freeFlip: ({ n }) => `${n} käyttää saunan ilmaisen käännön.`,
+    lg_payFlip: ({ n, cost }) => `${n} maksaa ${cost} ja kääntää merkin.`,
+    lg_leave: ({ n }) => `${n} jättää merkin toistaiseksi.`,
+    lg_skip: ({ n, reason }) => `${n} jää vuoron väliin (${reason}).`,
+    lg_blizzard: ({ n }) => `❄️ Lapin lumimyrsky! ${n} on jumissa, kunnes heittää 1 tai 2.`,
+    lg_sauna: ({ n }) => `♨️ ${n} pysähtyy saunaan: yksi vuoro väliin, sitten yksi ilmainen merkin kääntö.`,
+    lg_reindeer: ({ n }) => `🦌 Poroja tiellä — ${n} pysähtyy tähän.`,
+    lg_sun: ({ n }) => `☀️ Yötön yö! ${n} ei tarvitse unta ja liikkuu uudelleen.`,
+    lg_korva: ({ n, amt }) => `🎅 ${n} ehtii ensimmäisenä Korvatunturille — joulupukki antaa ${amt}!`,
+    lg_korvaLate: ({ n }) => `🎅 Joulupukki vilkuttaa pelaajalle ${n}, mutta lahja on jo annettu.`,
+    lg_turned: ({ n, city, tok, effect }) => `${n} kääntää merkin (${city}): ${tok}. ${effect}.`,
+    lg_win: ({ n, sampo, city }) => `🏆 ${n} tuo ${sampo ? 'Sammon' : 'Sammon sirpaleen'} kotiin (${city}) ja voittaa!`,
+    ef_money: ({ amt, gf }) => `+${amt}` + (gf ? ' (kultamaat: tuplasti!)' : ''),
+    ef_lose3: 'Menetät 3 vuoroa', ef_nothing: 'Ei mitään',
+    ef_loseAll: ({ amt }) => `Menetät kaikki rahasi (−${amt})`,
+    ef_loseHalf: ({ amt }) => `Menetät puolet rahoistasi (−${amt})`,
+    ef_fragWin: 'Voittomerkki! Vie se kotiin.', ef_fragBin: 'Arvoton — poistetaan pelistä',
+    ef_sampo: 'Vie se Helsinkiin tai Rovaniemelle, niin voitat!',
+    fl_gold: 'Kultahippu kimaltaa Lemmenjoessa.',
+    fl_silver: 'Vanha hopeasolki löytyy koivun juurelta.',
+    fl_berries: 'Kokonainen suo täynnä hilloja — torilla pieni omaisuus.',
+    fl_swamp: 'Täällä ei ole mitään — paitsi hyttysiä. Ne löytävät sinut.',
+    fl_empty: 'Pelkkää sammalta, muutama puolukanlehti ja yksi hämmentynyt hyttynen.',
+    fl_louhi: 'Louhi, Pohjolan emäntä, vie jokaisen eurosi.',
+    fl_hiisi: 'Hiisi nappaa kukkarosi ja katoaa kuusikkoon.',
+    fl_fragWin: 'Kun Sampo on löytynyt, sen sirpaleessakin on taikaa.',
+    fl_fragBin: 'Palanen Sampoa… mutta siinä ei ole taikaa ennen kuin itse Sampo löytyy.',
+    fl_sampo: 'Kalevalan taikamylly — se jauhaa jauhoja, suoloja ja rahoja.',
+    st_skipSauna: 'Saunassa rentoutumassa — tämä vuoro jää väliin.',
+    st_skipMosq: ({ k }) => `Hyttysiä torjumassa — väliin jääviä vuoroja: ${k}.`,
+    bt_skip: 'Ohita vuoro',
+    st_storm: 'Jumissa Itämeren myrskyssä. Heitä 1 tai 2 jatkaaksesi.',
+    st_blizzard: 'Lumimyrsky saartaa. Heitä 1 tai 2 päästäksesi irti.',
+    bt_escape: 'Heitä päästäksesi irti', sb_escape: 'Tarvitset 1 tai 2',
+    st_atSea: ({ dest }) => `Merellä, suuntana ${dest}.`,
+    bt_sail: 'Jatka purjehdusta', sb_sailFree: 'Ilmainen kyyti: 2 askelta', sb_sailRoll: 'Heitä matka',
+    st_in: ({ place }) => `Sijainti: ${place}.`,
+    st_turned: ' Merkki on jo käännetty.', st_hidden: ' Täällä on piilotettu merkki.',
+    st_carry: ({ sampo }) => ` Kannat ${sampo ? 'Sampoa' : 'voittavaa sirpaletta'} — vie se kotiin!`,
+    bt_walk: '🥾 Heitä ja kävele', sb_walk: 'Tie · ilmainen', sb_island: 'Ei tietä — saari',
+    bt_ferry: '⛴️ Lautta', sb_ferryBroke: 'Rahaton: 2 askelta ilmaiseksi', sb_ferry: ({ cost }) => `${cost} · heitä`,
+    bt_train: '🚆 Juna',
+    bt_snow: '🛷 Moottorikelkka', sb_snow: ({ cost }) => `${cost} · heitto ×2`,
+    bt_luck: '🎲 Kokeile onnea', sb_luck: 'Heitä 4–6: ilmainen kääntö',
+    bt_freeFlip: '♨️ Ilmainen kääntö', sb_sauna: 'Saunan palkinto', bt_flip: '🔍 Käännä merkki',
+    st_moving: 'Liikkuu…',
+    st_move: ({ snow, d, extra }) => `${snow ? 'Moottorikelkalla' : 'Kävele'} ${steps(d, 'askel', 'askelta')}${extra ? ' (yöttömän yön lisäsiirto)' : ''} — napauta hehkuvaa ruutua. Voit pysähtyä aiemmin kaupunkiin.`,
+    st_ferryBroke: 'Olet rahaton: purjehdi 2 askelta ilmaiseksi. Minne?',
+    st_ferry: ({ cost }) => `Nouse kyytiin (${cost}) ja heitä. Pysähdyt ensimmäiseen satamaan.`,
+    sb_route: ({ k, lake }) => `${steps(k, 'askel', 'askelta')}${lake ? ' · järvi' : ''}`,
+    bt_back: 'Takaisin',
+    st_train: ({ cost }) => `Valitse asema (${cost}).`,
+    st_token: ({ city, gf, swamp }) => `Piilotettu merkki kaupungissa ${city}` + (gf ? ' — kultamaat: aarre on tuplasti arvokas!' : swamp ? ' — hyttyssuo: tyhjä merkki maksaa 3 vuoroa.' : '.'),
+    bt_flipFree: '♨️ Käännä ilmaiseksi', bt_flipPay: ({ cost }) => `🔍 Käännä (${cost})`,
+    bt_leave: 'Jatka matkaa', sb_leave: 'Kokeile onneasi ensi vuorolla tai jatka eteenpäin',
+    st_sun: 'Yötön yö — ei tarvitse nukkua. Ota heti lisäsiirto!',
+    bt_sun: '☀️ Heitä ja kävele uudelleen',
+    st_won: ({ n }) => `${n} löysi tiensä kotiin Sammon voimin. Peli päättyi.`,
+    bt_showWin: 'Näytä tulos',
+    rv_turns: ({ n, place }) => `${n} kääntää merkin (${place})`,
+    continue: 'Jatka',
+    wn_title: ({ n }) => `${n} voittaa!`,
+    wn_text: ({ n, sampo, city, r }) => `${n} toi ${sampo ? 'Sammon' : 'Sammon sirpaleen'} kotiin (${city}) kierroksella ${r}.`,
+    wn_board: 'Katso pelilautaa',
+    close: 'Sulje', logTitle: 'Tapahtumat',
+    ng_q: 'Aloitetaanko uusi peli?', ng_text: 'Nykyinen peli menetetään.', ng_go: 'Aloita uusi peli',
+  },
+
+  sv: {
+    tagline: 'Tävla genom Finland, hitta Sampo och för det hem till Helsingfors eller Rovaniemi.',
+    players: 'Spelare', setupRows: 'Namn, färger och startstad', firstPlayer: 'Startspelare',
+    startHunt: 'Börja jakten', backToGame: 'Tillbaka till spelet', rules: 'Regler', random: 'Slumpvis',
+    playerN: ({ i }) => `Spelare ${i}`, fewer: 'Färre spelare', more: 'Fler spelare', changeColour: 'Byt färg',
+    zoom: 'Zooma', newGame: 'Nytt spel', langTitle: 'Språk',
+    round: ({ r }) => `Omgång ${r}`,
+    mapLapland: '▲ Lappland · snöskoterland', mapBothnia: 'Bottniska viken', mapGulf: 'Finska viken',
+    openWater: 'öppet vatten', theRoad: 'vägen',
+    sp_blizzard: 'Snöstorm i Lappland', sp_sun: 'Midnattssol', sp_reindeer: 'Renar på vägen', sp_sauna: 'Bastu', sp_storm: 'Östersjöstorm',
+    tok_gold: 'Lemmenjokiguld', tok_silver: 'Silver', tok_berries: 'Hjortron', tok_empty: 'Tom',
+    tok_louhi: 'Louhi', tok_hiisi: 'Hiisi', tok_fragment: 'Sampofragment', tok_sampo: 'Sampo',
+    reason_sauna: 'bastu', reason_mosquitoes: 'myggor',
+    lg_start: ({ n }) => `Jakten har börjat! ${n} börjar.`,
+    lg_snow: ({ n, cost, v, d }) => `${n} startar en snöskoter (−${cost}) och slår ${v} → ${d} steg.`,
+    lg_rolls: ({ n, v }) => `${n} slår ${v}.`,
+    lg_rollsSea: ({ n, v }) => `${n} slår ${v} till sjöss.`,
+    lg_nowhere: ({ n }) => `${n} kommer ingenstans.`,
+    lg_ferryFree: ({ n, dest }) => `${n} är pank och får åka gratis mot ${dest} (2 steg).`,
+    lg_ferry: ({ n, dest, cost }) => `${n} går ombord på färjan till ${dest} (−${cost}).`,
+    lg_drift: ({ n }) => `${n} driver vidare (2 gratis steg).`,
+    lg_docks: ({ n, city }) => `${n} lägger till i ${city}.`,
+    lg_storm: ({ n }) => `🌊 Östersjöstorm! ${n} sitter fast tills hen slår 1 eller 2.`,
+    lg_escape: ({ n, v, storm }) => `${n} slår ${v} och tar sig loss ur ${storm ? 'stormen' : 'snöstormen'}!`,
+    lg_stuck: ({ n, v, storm }) => `${n} slår ${v} — sitter fortfarande fast i ${storm ? 'stormen' : 'snöstormen'}.`,
+    lg_train: ({ n, city, cost }) => `${n} tar tåget till ${city} (−${cost}).`,
+    lg_luckYes: ({ n, v }) => `${n} slår ${v} — tur! Brickan vänds gratis.`,
+    lg_luckNo: ({ n, v }) => `${n} slår ${v} — ingen tur med brickan.`,
+    lg_freeFlip: ({ n }) => `${n} använder sin bastufräscha gratisvändning.`,
+    lg_payFlip: ({ n, cost }) => `${n} betalar ${cost} och vänder brickan.`,
+    lg_leave: ({ n }) => `${n} låter brickan ligga tills vidare.`,
+    lg_skip: ({ n, reason }) => `${n} står över en tur (${reason}).`,
+    lg_blizzard: ({ n }) => `❄️ Snöstorm i Lappland! ${n} sitter fast tills hen slår 1 eller 2.`,
+    lg_sauna: ({ n }) => `♨️ ${n} stannar för att basta: stå över en tur och vänd sedan en bricka gratis.`,
+    lg_reindeer: ({ n }) => `🦌 Renar på vägen — här tar förflyttningen slut för ${n}.`,
+    lg_sun: ({ n }) => `☀️ Midnattssol! ${n} behöver ingen sömn och flyttar igen.`,
+    lg_korva: ({ n, amt }) => `🎅 ${n} är först till Korvatunturi — julgubben delar ut ${amt}!`,
+    lg_korvaLate: ({ n }) => `🎅 Julgubben vinkar åt ${n}, men gåvan är redan given.`,
+    lg_turned: ({ n, city, tok, effect }) => `${n} vänder brickan i ${city}: ${tok}. ${effect}.`,
+    lg_win: ({ n, sampo, city }) => `🏆 ${n} för ${sampo ? 'Sampo' : 'ett Sampofragment'} hem till ${city} och vinner!`,
+    ef_money: ({ amt, gf }) => `+${amt}` + (gf ? ' (guldfälten: dubbelt!)' : ''),
+    ef_lose3: 'Förlora 3 turer', ef_nothing: 'Ingenting',
+    ef_loseAll: ({ amt }) => `Förlora alla dina pengar (−${amt})`,
+    ef_loseHalf: ({ amt }) => `Förlora hälften av dina pengar (−${amt})`,
+    ef_fragWin: 'En vinstbricka! För den hem.', ef_fragBin: 'Värdelös — kasseras',
+    ef_sampo: 'För det till Helsingfors eller Rovaniemi så vinner du!',
+    fl_gold: 'En guldklimp glimmar i Lemmenjoki älv.',
+    fl_silver: 'En gammal silversölja dyker upp under en björkrot.',
+    fl_berries: 'En hel myr full av hjortron — en förmögenhet på torget.',
+    fl_swamp: 'Ingenting här — utom myggorna. De hittar dig.',
+    fl_empty: 'Bara mossa, några lingonblad och en förvirrad mygga.',
+    fl_louhi: 'Louhi, Pohjolas värdinna, tar varenda euro du har.',
+    fl_hiisi: 'En hiisi nappar din börs och försvinner in i granskogen.',
+    fl_fragWin: 'Nu när Sampo är funnet bär även ett fragment av det på magin.',
+    fl_fragBin: 'En bit av Sampo… men utan magi tills själva Sampo har hittats.',
+    fl_sampo: 'Kalevalas trollkvarn — den mal fram mjöl, salt och guld.',
+    st_skipSauna: 'Avkoppling i bastun — den här turen står du över.',
+    st_skipMosq: ({ k }) => `Slåss mot myggor — ${k} ${k > 1 ? 'turer' : 'tur'} kvar att stå över.`,
+    bt_skip: 'Stå över turen',
+    st_storm: 'Fast i en Östersjöstorm. Slå 1 eller 2 för att segla vidare.',
+    st_blizzard: 'Insnöad av en snöstorm. Slå 1 eller 2 för att ta dig loss.',
+    bt_escape: 'Slå för att ta dig loss', sb_escape: 'Du behöver 1 eller 2',
+    st_atSea: ({ dest }) => `Till sjöss, på väg mot ${dest}.`,
+    bt_sail: 'Segla vidare', sb_sailFree: 'Gratis skjuts: 2 steg', sb_sailRoll: 'Slå för avstånd',
+    st_in: ({ place, isCity }) => `${isCity ? 'I' : 'På'} ${place}.`,
+    st_turned: ' Brickan är redan vänd.', st_hidden: ' Här ligger en dold bricka.',
+    st_carry: ({ sampo }) => ` Du bär på ${sampo ? 'Sampo' : 'ett vinnande fragment'} — för det hem!`,
+    bt_walk: '🥾 Slå &amp; gå', sb_walk: 'Väg · gratis', sb_island: 'Ingen väg — ö',
+    bt_ferry: '⛴️ Färja', sb_ferryBroke: 'Pank: 2 steg gratis', sb_ferry: ({ cost }) => `${cost} · slå`,
+    bt_train: '🚆 Tåg',
+    bt_snow: '🛷 Snöskoter', sb_snow: ({ cost }) => `${cost} · slag ×2`,
+    bt_luck: '🎲 Pröva lyckan', sb_luck: 'Slå 4–6: gratis vändning',
+    bt_freeFlip: '♨️ Gratis vändning', sb_sauna: 'Bastubelöning', bt_flip: '🔍 Vänd brickan',
+    st_moving: 'Flyttar…',
+    st_move: ({ snow, d, extra }) => `${snow ? 'Snöskoter' : 'Gå'} ${d} steg${extra ? ' (midnattssolens bonus)' : ''} — tryck på en lysande ruta. Du får stanna tidigare i en stad.`,
+    st_ferryBroke: 'Du är pank: segla 2 steg gratis. Vart?',
+    st_ferry: ({ cost }) => `Gå ombord för ${cost} och slå sedan. Du stannar i första hamnen.`,
+    sb_route: ({ k, lake }) => `${k} steg${lake ? ' · sjö' : ''}`,
+    bt_back: 'Tillbaka',
+    st_train: ({ cost }) => `Välj en station (${cost}).`,
+    st_token: ({ city, gf, swamp }) => `En dold bricka ligger i ${city}` + (gf ? ' — guldfälten: skatten är värd dubbelt!' : swamp ? ' — myggträsk: en tom bricka kostar 3 turer.' : '.'),
+    bt_flipFree: '♨️ Vänd gratis', bt_flipPay: ({ cost }) => `🔍 Vänd för ${cost}`,
+    bt_leave: 'Fortsätt', sb_leave: 'Pröva lyckan nästa tur, eller res vidare',
+    st_sun: 'Midnattssol — ingen sömn behövs. Ta ett extra drag direkt!',
+    bt_sun: '☀️ Slå &amp; gå igen',
+    st_won: ({ n }) => `${n} hittade hem med Sampos magi. Spelet är slut.`,
+    bt_showWin: 'Visa resultat',
+    rv_turns: ({ n, place }) => `${n} vänder brickan i ${place}`,
+    continue: 'Fortsätt',
+    wn_title: ({ n }) => `${n} vinner!`,
+    wn_text: ({ n, sampo, city, r }) => `${n} förde ${sampo ? 'Sampo' : 'ett Sampofragment'} hem till ${city} i omgång ${r}.`,
+    wn_board: 'Titta på spelplanen',
+    close: 'Stäng', logTitle: 'Händelselogg',
+    ng_q: 'Starta ett nytt spel?', ng_text: 'Det pågående spelet går förlorat.', ng_go: 'Starta nytt spel',
+  },
+};
+
+const LANGS = ['en', 'fi', 'sv'];
+const CITY_NAMES = {
+  fi: { mhm: 'Maarianhamina' },
+  sv: {
+    hel: 'Helsingfors', tku: 'Åbo', tre: 'Tammerfors', por: 'Björneborg', vaa: 'Vasa', kok: 'Karleby',
+    lah: 'Lahtis', lpr: 'Villmanstrand', svl: 'Nyslott', mik: 'S:t Michel', kaj: 'Kajana',
+    oul: 'Uleåborg', hai: 'Karlö', ina: 'Enare',
+  },
+};
+const cityName = id => (CITY_NAMES[lang] && CITY_NAMES[lang][id]) || NODES[id].name;
+
+// Resolve message arguments: ids become names, amounts become money, nested messages get translated.
+function resolveArgs(a) {
+  const o = {};
+  for (const [k, v] of Object.entries(a || {})) {
+    if (k === 'city' || k === 'dest') o[k] = cityName(v);
+    else if (k === 'cost' || k === 'amt') o[k] = euro(v);
+    else if (k === 'tok') o[k] = t('tok_' + v);
+    else if (k === 'reason') o[k] = t('reason_' + v);
+    else if (v && typeof v === 'object') o[k] = t(v.k, v.a);
+    else o[k] = v;
+  }
+  return o;
+}
+function t(k, a) {
+  const f = STR[lang][k] ?? STR.en[k];
+  if (f == null) return k;
+  return typeof f === 'function' ? f(resolveArgs(a)) : f;
+}
+const msg = (m) => m.text != null ? m.text : t(m.k, m.a);   // m.text: logs saved before the language toggle
+
+/* =====================================================================
+   State
+   ===================================================================== */
+let S = null;          // saved game state
+let busy = false;      // animation in progress (not saved)
+let zoomed = false;
+let hideWin = false;   // winner card dismissed to look at the board
+let gen = 0;           // bumped by newGame so stale timers from the previous game stop
+const FAST = /[?&]fast\b/.test(location.search);   // test hook: skip animations
+
+function save() {
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch (e) { /* storage unavailable */ }
+}
+function loadSaved() {
+  try { const raw = localStorage.getItem(SAVE_KEY); return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
+}
+
+function shuffle(a) {
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
+const d6 = () => 1 + Math.floor(Math.random() * 6);
+const euro = n => lang === 'en' ? '€' + n.toLocaleString('en-US') : n.toLocaleString('fi-FI') + '\u00a0€';
+const cur = () => S.players[S.current];
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+function newGame(setup) {
+  hideWin = false;
+  gen++;
+  busy = false;
+  document.getElementById('die').classList.remove('rolling');
+  drawDie(null);
+  const pool = [];
+  for (const [type, def] of Object.entries(TOKENS)) for (let i = 0; i < def.n; i++) pool.push(type);
+  shuffle(pool);
+  const tokens = {};
+  TOKEN_CITIES.forEach((id, i) => { tokens[id] = { type: pool[i] || 'empty', revealed: false }; });
+
+  S = {
+    v: 1,
+    players: setup.players.map(p => ({
+      name: p.name, color: p.color, node: p.start, money: START_MONEY,
+      sampo: false, fragments: 0, skip: 0, skipReason: '', stuck: null,
+      voyage: null, freeFlip: false,
+    })),
+    tokens,
+    sampoFound: false,
+    korvaClaimed: false,
+    current: setup.first,
+    turn: 1,
+    phase: 'start',
+    roll: null,
+    mode: null,
+    targets: null,
+    reveal: null,
+    winner: null,
+    log: [],
+  };
+  log('lg_start', { n: cur().name });
+  startTurn(true);
+}
+
+function log(k, a, who = S.current) {
+  const p = who == null ? null : S.players[who];
+  S.log.push({ k, a, c: p ? p.color : null });
+  if (S.log.length > 300) S.log.shift();
+}
+
+/* =====================================================================
+   Rules engine
+   ===================================================================== */
+
+// All ways to walk exactly `d` steps (no doubling back), plus any city passed
+// on the way (you may stop short at a city). Reindeer crossings end the move.
+function reachable(start, d, lapOnly) {
+  const out = {}, dead = [];
+  const visited = new Set([start]);
+  (function dfs(id, path) {
+    const depth = path.length - 1;
+    if (depth > 0) {
+      const n = NODES[id];
+      const halt = depth === d || n.special === 'reindeer';
+      if ((halt || n.kind === 'city') && !out[id]) out[id] = path.slice();
+      if (halt) return;
+    }
+    let moved = false;
+    for (const nb of ROAD[id]) {
+      if (visited.has(nb) || (lapOnly && !NODES[nb].lap)) continue;
+      moved = true;
+      visited.add(nb); path.push(nb);
+      dfs(nb, path);
+      path.pop(); visited.delete(nb);
+    }
+    if (!moved && depth > 0) dead.push(path.slice());
+  })(start, [start]);
+  if (!Object.keys(out).length) for (const p of dead) out[p[p.length - 1]] = p;
+  return out;
+}
+
+const hiddenTokenAt = id => S.tokens[id] && !S.tokens[id].revealed;
+const canWin = p => p.sampo || (S.sampoFound && p.fragments > 0);
+const ferryRoutesFrom = id => SEA_ROUTES.filter(r => r[0] === id || r[r.length - 1] === id)
+  .map(r => r[0] === id ? r.slice() : r.slice().reverse());
+const nodeName = id => NODES[id].kind === 'city' ? cityName(id) : NODES[id].special ? t('sp_' + NODES[id].special) : t(NODES[id].kind === 'sea' ? 'openWater' : 'theRoad');
+
+function startTurn(first) {
+  S.phase = cur().skip > 0 ? 'skip' : 'start';
+  S.roll = null; S.mode = null; S.targets = null; S.reveal = null;
+  save();
+  render();
+  scrollToPawn(first ? 'auto' : 'smooth');
+}
+
+function endTurn() {
+  if (S.phase === 'won') return;
+  S.current = (S.current + 1) % S.players.length;
+  if (S.current === 0) S.turn++;
+  startTurn();
+}
+
+// Every die roll and pawn move is committed to the save before it animates
+// (S.pendingRoll / S.pendingMove), so a reload mid-animation finishes the
+// action instead of undoing a fare or a route choice. `gen` changes when a new
+// game replaces S, which stops any timers still running for the old game.
+const ROLL_THEN = {
+  walk:   v => { log('lg_rolls', { n: cur().name, v }); beginMove(v, false); },
+  snow:   v => { log('lg_snow', { n: cur().name, cost: COSTS.snow, v, d: v * 2 }); beginMove(v * 2, true); },
+  sun:    v => { log('lg_rolls', { n: cur().name, v }); beginMove(v, false, true); },
+  ferry:  v => { log('lg_rolls', { n: cur().name, v }); sail(v); },
+  sail:   v => { log('lg_rollsSea', { n: cur().name, v }); sail(v); },
+  escape: v => escapeRolled(v),
+  luck:   v => luckRolled(v),
+};
+
+function rollDie(kind) {
+  const v = d6();
+  S.pendingRoll = { kind, v };
+  save();
+  busy = true;
+  render();
+  const g = gen;
+  const die = document.getElementById('die');
+  die.classList.remove('blank');
+  die.classList.add('rolling');
+  let n = 0;
+  const iv = setInterval(() => {
+    if (g !== gen) return clearInterval(iv);
+    drawDie(d6());
+    if (++n > 7 || FAST) { clearInterval(iv); die.classList.remove('rolling'); drawDie(v); busy = false; finishRoll(); }
+  }, FAST ? 0 : 60);
+}
+
+function finishRoll() {
+  const { kind, v } = S.pendingRoll;
+  delete S.pendingRoll;
+  S.lastRoll = v;
+  ROLL_THEN[kind](v);
+}
+
+// --- Actions -----------------------------------------------------------
+
+function actWalk(mode) {
+  if (mode === 'snow') cur().money -= COSTS.snow;
+  rollDie(mode === 'snow' ? 'snow' : 'walk');
+}
+
+function beginMove(d, lapOnly, extra) {
+  const p = cur();
+  S.roll = d;
+  S.mode = lapOnly ? 'snow' : 'road';
+  S.targets = reachable(p.node, d, lapOnly);
+  S.phase = 'move';
+  S.extraMove = !!extra;
+  if (!Object.keys(S.targets).length) {
+    log('lg_nowhere', { n: p.name });
+    return endTurn();
+  }
+  save();
+  render();
+}
+
+function chooseTarget(id) {
+  if (busy || S.phase !== 'move' || !S.targets[id]) return;
+  const path = S.targets[id];
+  S.targets = null;
+  animatePath(path, { kind: 'land' });
+}
+
+function actFerry() {
+  S.phase = 'ferry';
+  save(); render();
+}
+
+function chooseFerry(i) {
+  const p = cur();
+  const route = ferryRoutesFrom(p.node)[i];
+  if (!route) return;
+  const free = p.money < COSTS.ferry;
+  p.voyage = { route, i: 0, free };
+  const dest = route[route.length - 1];
+  if (free) {
+    log('lg_ferryFree', { n: p.name, dest });
+    sail(2);
+  } else {
+    p.money -= COSTS.ferry;
+    log('lg_ferry', { n: p.name, dest, cost: COSTS.ferry });
+    rollDie('ferry');
+  }
+}
+
+function actSailOn() {
+  const p = cur();
+  if (p.voyage.free) { log('lg_drift', { n: p.name }); sail(2); }
+  else rollDie('sail');
+}
+
+function sail(n) {
+  const v = cur().voyage;
+  const to = Math.min(v.i + n, v.route.length - 1);
+  const path = v.route.slice(v.i, to + 1);
+  v.i = to;
+  animatePath(path, { kind: 'sail' });
+}
+
+function sailArrived() {
+  const p = cur();
+  const v = p.voyage, id = v.route[v.i];
+  if (v.i === v.route.length - 1) {
+    p.voyage = null;
+    log('lg_docks', { n: p.name, city: id });
+    return land(id);
+  }
+  if (NODES[id].special === 'storm') {
+    p.stuck = 'storm';
+    log('lg_storm', { n: p.name });
+  }
+  endTurn();
+}
+
+function actEscape() { rollDie('escape'); }
+
+function escapeRolled(v) {
+  const p = cur();
+  const storm = p.stuck === 'storm';
+  if (v <= 2) {
+    p.stuck = null;
+    log('lg_escape', { n: p.name, v, storm });
+    if (storm && p.voyage) sail(v);
+    else beginMove(v, false);
+  } else {
+    log('lg_stuck', { n: p.name, v, storm });
+    endTurn();
+  }
+}
+
+function actTrain() {
+  S.phase = 'train';
+  save(); render();
+}
+
+function chooseTrain(dest) {
+  const p = cur();
+  if (!RAIL[p.node].includes(dest) || p.money < COSTS.train) return;
+  p.money -= COSTS.train;
+  log('lg_train', { n: p.name, city: dest, cost: COSTS.train });
+  animatePath([p.node, dest], { kind: 'land' });
+}
+
+function actTryLuck() { rollDie('luck'); }
+
+function luckRolled(v) {
+  const p = cur();
+  if (v >= 4) { log('lg_luckYes', { n: p.name, v }); reveal(p.node); }
+  else { log('lg_luckNo', { n: p.name, v }); endTurn(); }
+}
+
+function actPayFlip(free) {
+  const p = cur();
+  if (free) { p.freeFlip = false; log('lg_freeFlip', { n: p.name }); }
+  else { p.money -= COSTS.flip; log('lg_payFlip', { n: p.name, cost: COSTS.flip }); }
+  reveal(p.node);
+}
+
+function actLeave() {
+  log('lg_leave', { n: cur().name });
+  endTurn();
+}
+
+function actSunMove() { rollDie('sun'); }
+
+function actSkip() {
+  const p = cur();
+  p.skip--;
+  log('lg_skip', { n: p.name, reason: p.skipReason });
+  endTurn();
+}
+
+// --- Landing & tokens --------------------------------------------------
+
+function land(id) {
+  const p = cur();
+  const n = NODES[id];
+  p.node = id;
+
+  switch (n.special) {
+    case 'blizzard':
+      p.stuck = 'blizzard';
+      log('lg_blizzard', { n: p.name });
+      break;
+    case 'sauna':
+      p.skip = 1; p.skipReason = 'sauna'; p.freeFlip = true;
+      log('lg_sauna', { n: p.name });
+      break;
+    case 'reindeer':
+      log('lg_reindeer', { n: p.name });
+      break;
+    case 'sun':
+      log('lg_sun', { n: p.name });
+      S.phase = 'sun'; S.targets = null;
+      save(); render();
+      return;
+  }
+
+  if (n.korva) {
+    if (!S.korvaClaimed) {
+      S.korvaClaimed = true;
+      p.money += 500;
+      log('lg_korva', { n: p.name, amt: 500 });
+    } else {
+      log('lg_korvaLate', { n: p.name });
+    }
+  }
+
+  if (isFinish(id) && canWin(p)) return win();
+  if (hiddenTokenAt(id)) { S.phase = 'token'; save(); render(); return; }
+  endTurn();
+}
+
+// Effects and flavour are stored as message keys so the pop-up can be re-rendered in either language.
+function reveal(id) {
+  const p = cur();
+  const tk = S.tokens[id];
+  tk.revealed = true;
+  const def = TOKENS[tk.type];
+  const city = NODES[id];
+  let effect, flavour, bad = false;
+
+  if (def.value) {
+    const amt = def.value * (city.goldfield ? 2 : 1);
+    p.money += amt;
+    effect = { k: 'ef_money', a: { amt, gf: !!city.goldfield } };
+    flavour = 'fl_' + tk.type;
+  } else if (tk.type === 'empty') {
+    if (city.swamp) {
+      p.skip += 3; p.skipReason = 'mosquitoes';
+      effect = { k: 'ef_lose3' }; flavour = 'fl_swamp'; bad = true;
+    } else {
+      effect = { k: 'ef_nothing' }; flavour = 'fl_empty';
+    }
+  } else if (tk.type === 'louhi') {
+    effect = { k: 'ef_loseAll', a: { amt: p.money } }; flavour = 'fl_louhi'; bad = true;
+    p.money = 0;
+  } else if (tk.type === 'hiisi') {
+    const lost = Math.floor(p.money / 2);
+    p.money -= lost;
+    effect = { k: 'ef_loseHalf', a: { amt: lost } }; flavour = 'fl_hiisi'; bad = true;
+  } else if (tk.type === 'fragment') {
+    if (S.sampoFound) {
+      p.fragments++;
+      effect = { k: 'ef_fragWin' }; flavour = 'fl_fragWin';
+    } else {
+      effect = { k: 'ef_fragBin' }; flavour = 'fl_fragBin'; bad = true;
+    }
+  } else if (tk.type === 'sampo') {
+    p.sampo = true; S.sampoFound = true;
+    effect = { k: 'ef_sampo' }; flavour = 'fl_sampo';
+  }
+
+  log('lg_turned', { n: p.name, city: id, tok: tk.type, effect });
+  S.reveal = { type: tk.type, city: id, effect, flavour, bad, who: S.current };
+  S.phase = 'reveal';
+  save(); render();
+}
+
+function closeReveal() {
+  S.reveal = null;
+  endTurn();
+}
+
+function win() {
+  const p = cur();
+  S.phase = 'won';
+  S.winner = S.current;
+  log('lg_win', { n: p.name, sampo: p.sampo, city: p.node });
+  save(); render();
+}
+
+/* =====================================================================
+   Rendering
+   ===================================================================== */
+const svg = document.getElementById('map');
+const NS = 'http://www.w3.org/2000/svg';
+
+function poly(points) { return points.map(([lo, la]) => P(lo, la).join(',')).join(' '); }
+
+const FINLAND = [[22.9,59.82],[23.6,59.95],[24.5,60.1],[25.4,60.22],[26.4,60.38],[27.2,60.5],[27.8,60.55],[28.7,61.0],[29.4,61.3],[30.2,61.8],[31.1,62.3],[31.55,62.9],[31.2,63.2],[30.4,63.6],[29.95,64.1],[30.1,64.6],[29.7,64.9],[29.6,65.5],[29.9,66.0],[29.3,66.5],[29.1,66.9],[30.0,67.6],[29.4,67.95],[28.7,68.2],[28.5,68.55],[28.9,69.0],[29.3,69.3],[28.9,69.6],[28.4,69.85],[28.0,70.08],[27.3,69.95],[26.5,69.9],[26.0,69.7],[25.8,69.45],[25.3,69.1],[24.8,68.85],[24.0,68.8],[23.3,68.65],[22.4,68.7],[21.6,69.0],[21.0,69.25],[20.55,69.06],[21.1,68.95],[21.9,68.55],[22.9,68.2],[23.6,67.9],[23.6,67.4],[23.9,66.8],[23.7,66.3],[24.15,65.85],[24.6,65.65],[25.1,65.4],[25.3,65.1],[24.9,64.9],[24.5,64.75],[24.0,64.4],[23.2,64.0],[22.5,63.7],[21.8,63.4],[21.2,63.1],[21.4,62.7],[21.2,62.3],[21.45,61.9],[21.5,61.5],[21.4,61.1],[21.2,60.8],[21.5,60.5],[22.1,60.25],[22.6,60.0]];
+const ALAND = [[19.6,60.05],[19.9,59.95],[20.3,60.05],[20.4,60.25],[20.1,60.4],[19.7,60.35],[19.55,60.2]];
+const LAKES = [
+  [[25.6,61.15],[25.45,61.35],[25.5,61.6],[25.35,61.85],[25.55,62.1],[25.7,62.0],[25.65,61.75],[25.75,61.45],[25.7,61.2]],
+  [[27.8,61.15],[28.4,61.2],[28.9,61.6],[29.2,61.9],[29.4,62.3],[28.9,62.6],[28.3,62.7],[27.9,62.5],[28.2,62.2],[27.6,61.9],[27.5,61.6],[28.0,61.5],[28.1,61.3]],
+  [[27.2,68.9],[27.8,68.85],[28.3,69.0],[28.0,69.2],[27.4,69.15]],
+  [[26.6,64.2],[27.3,64.15],[27.4,64.35],[26.9,64.45],[26.5,64.35]],
+];
+
+function buildMap() {
+  let h = '';
+  h += `<rect width="400" height="760" fill="var(--sea)"/>`;
+  h += `<polygon points="${poly(FINLAND)}" fill="var(--land)" stroke="var(--land-edge)" stroke-width="1.5" stroke-linejoin="round"/>`;
+  h += `<polygon points="${poly(ALAND)}" fill="var(--land)" stroke="var(--land-edge)" stroke-width="1.2"/>`;
+  const hai = NODES.hai;
+  h += `<ellipse cx="${hai.x}" cy="${hai.y}" rx="11" ry="6" fill="var(--land)" stroke="var(--land-edge)" stroke-width="1.2"/>`;
+  for (const l of LAKES) h += `<polygon points="${poly(l)}" fill="var(--sea)" stroke="#6a9bbf" stroke-width=".8" stroke-linejoin="round"/>`;
+  // Lapland boundary hint
+  h += `<line x1="40" y1="290" x2="380" y2="290" stroke="#6a8aa3" stroke-width=".8" stroke-dasharray="2 4" opacity=".6"/>`;
+  h += `<text x="48" y="286" font-size="8" fill="#2f5877" font-style="italic">${t('mapLapland')}</text>`;
+  h += `<text x="30" y="560" font-size="10" fill="#3d6a8d" font-style="italic" transform="rotate(-72 30 560)">${t('mapBothnia')}</text>`;
+  h += `<text x="250" y="752" font-size="10" fill="#3d6a8d" font-style="italic">${t('mapGulf')}</text>`;
+
+  // Rail
+  for (const [a, b] of RAIL_DEFS) {
+    const A = NODES[a], B = NODES[b];
+    h += `<line x1="${A.x}" y1="${A.y}" x2="${B.x}" y2="${B.y}" stroke="#555" stroke-width="3" opacity=".22" stroke-linecap="round"/>`;
+    h += `<line x1="${A.x}" y1="${A.y}" x2="${B.x}" y2="${B.y}" stroke="#fff" stroke-width="1.2" opacity=".5" stroke-dasharray="3 3"/>`;
+  }
+  // Ferry lanes
+  for (const r of SEA_ROUTES) {
+    h += `<polyline points="${r.map(id => NODES[id].x + ',' + NODES[id].y).join(' ')}" fill="none" stroke="#2f6fa0" stroke-width="1.3" stroke-dasharray="4 3" opacity=".9"/>`;
+  }
+  // Roads
+  const drawn = new Set();
+  for (const a in ROAD) for (const b of ROAD[a]) {
+    const k = a < b ? a + '|' + b : b + '|' + a;
+    if (drawn.has(k)) continue; drawn.add(k);
+    const A = NODES[a], B = NODES[b];
+    h += `<line x1="${A.x}" y1="${A.y}" x2="${B.x}" y2="${B.y}" stroke="var(--road)" stroke-width="1.6" opacity=".75"/>`;
+  }
+  // Nodes
+  for (const n of Object.values(NODES)) {
+    if (n.kind === 'city') continue;
+    if (n.special) {
+      h += `<circle cx="${n.x}" cy="${n.y}" r="7" fill="#fff" stroke="${n.kind === 'sea' ? '#2f6fa0' : 'var(--road)'}" stroke-width="1.2"/>`;
+      h += `<text x="${n.x}" y="${n.y + 3.6}" font-size="9.5" text-anchor="middle">${SPECIALS[n.special].icon}</text>`;
+    } else if (n.kind === 'sea') {
+      h += `<circle cx="${n.x}" cy="${n.y}" r="3.4" fill="#fff" stroke="#2f6fa0" stroke-width="1.2"/>`;
+    } else {
+      h += `<circle cx="${n.x}" cy="${n.y}" r="3.4" fill="var(--road)" stroke="#fff" stroke-width=".8"/>`;
+    }
+  }
+  for (const n of Object.values(NODES)) {
+    if (n.kind !== 'city') continue;
+    const r = n.finish ? 8.5 : 6.5;
+    const ring = n.finish ? '#b3261e' : '#4a3b28';
+    h += `<circle cx="${n.x}" cy="${n.y}" r="${r}" fill="#fffaf0" stroke="${ring}" stroke-width="${n.finish ? 2.4 : 1.4}"/>`;
+    if (n.finish) h += `<text x="${n.x}" y="${n.y + 3.5}" font-size="10" text-anchor="middle" fill="#b3261e">★</text>`;
+    if (n.korva) h += `<text x="${n.x}" y="${n.y + 3.6}" font-size="9" text-anchor="middle">🎅</text>`;
+    const off = r + 3;
+    const lab = n.lab || 'r';
+    const [lx, ly, anchor] = lab === 'l' ? [n.x - off, n.y + 3.3, 'end'] : lab === 't' ? [n.x, n.y - off - 1, 'middle'] : lab === 'b' ? [n.x, n.y + off + 8, 'middle'] : [n.x + off, n.y + 3.3, 'start'];
+    let extra = n.station ? ' 🚆' : '';
+    if (n.swamp) extra += ' 🦟';
+    if (n.goldfield) extra += ' ✨';
+    h += `<text class="lbl${n.finish ? ' finish' : ''}${n.island ? ' sea' : ''}" x="${lx}" y="${ly}" text-anchor="${anchor}">${esc(cityName(n.id))}${extra}</text>`;
+  }
+  h += `<g id="dyn"></g><g id="pawns"></g><g id="hits"></g>`;
+  svg.innerHTML = h;
+}
+
+const PAWN_OFFSETS = [[0, 0], [-6, -5], [6, -5], [-6, 5], [6, 5], [0, -9]];
+
+function pawnPos(i) {
+  const p = S.players[i];
+  const same = S.players.map((q, j) => j).filter(j => S.players[j].node === p.node);
+  const k = same.indexOf(i);
+  const [ox, oy] = same.length > 1 ? PAWN_OFFSETS[k % PAWN_OFFSETS.length] : [0, 0];
+  const n = NODES[p.node];
+  return [n.x + ox, n.y + oy];
+}
+
+function renderMapDynamic() {
+  let h = '';
+  // Hidden tokens: dark disc on the city
+  for (const id of TOKEN_CITIES) {
+    if (!hiddenTokenAt(id)) continue;
+    const n = NODES[id];
+    h += `<circle cx="${n.x}" cy="${n.y}" r="5" fill="#1c3550" stroke="var(--accent)" stroke-width="1.2"/>`;
+    h += `<text x="${n.x}" y="${n.y + 2.8}" font-size="7" font-weight="700" text-anchor="middle" fill="var(--accent)">?</text>`;
+  }
+  // Highlights
+  const hl = highlightIds();
+  for (const id of hl) {
+    const n = NODES[id];
+    h += `<circle class="target-ring" cx="${n.x}" cy="${n.y}" r="9"/>`;
+  }
+  document.getElementById('dyn').innerHTML = h;
+  document.getElementById('hits').innerHTML = hl.map(id => {
+    const n = NODES[id];
+    return `<circle class="hit" data-node="${id}" cx="${n.x}" cy="${n.y}" r="14"/>`;
+  }).join('');
+  renderPawns();
+}
+
+function highlightIds() {
+  if (!S || busy) return [];
+  const p = cur();
+  if (S.phase === 'move' && S.targets) return Object.keys(S.targets);
+  if (S.phase === 'train') return RAIL[p.node].slice();
+  if (S.phase === 'ferry') return ferryRoutesFrom(p.node).map(r => r[r.length - 1]);
+  return [];
+}
+
+function renderPawns() {
+  const g = document.getElementById('pawns');
+  if (g.childElementCount !== S.players.length) {
+    g.innerHTML = S.players.map((p, i) =>
+      `<g class="pawn" data-p="${i}"><circle r="6" fill="${p.color}" stroke="#fff" stroke-width="1.6"/>` +
+      `<text y="2.8" font-size="7.5" font-weight="800" text-anchor="middle" fill="#fff">${esc(p.name.trim()[0] || '?').toUpperCase()}</text></g>`).join('');
+  }
+  [...g.children].forEach((el, i) => {
+    const [x, y] = pawnPos(i);
+    el.style.transform = `translate(${x}px, ${y}px)`;
+    el.classList.toggle('active', i === S.current);
+  });
+  // current player's pawn on top
+  const active = g.querySelector(`[data-p="${S.current}"]`);
+  if (active && g.lastElementChild !== active) g.appendChild(active);
+}
+
+function animatePath(path, then) {
+  const p = cur();
+  S.pendingMove = { ...then, to: path[path.length - 1] };
+  save();
+  busy = true;
+  render();
+  const g = gen;
+  let k = 1;
+  const step = () => {
+    if (g !== gen) return;
+    if (k >= path.length) { busy = false; return finishMove(); }
+    p.node = path[k++];
+    renderPawns();
+    setTimeout(step, FAST ? 0 : 190);
+  };
+  step();
+}
+
+function finishMove() {
+  const m = S.pendingMove;
+  delete S.pendingMove;
+  cur().node = m.to;
+  if (m.kind === 'sail') sailArrived();
+  else land(m.to);
+}
+
+function scrollToPawn(behavior = 'smooth') {
+  if (!S || S.phase === 'won') return;
+  const wrap = document.getElementById('mapwrap');
+  const scale = svg.clientWidth / 400;
+  const n = NODES[cur().node];
+  wrap.scrollTo({ top: n.y * scale - wrap.clientHeight / 2, left: n.x * scale - wrap.clientWidth / 2, behavior });
+}
+
+const PIPS = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
+function drawDie(v) {
+  const die = document.getElementById('die');
+  if (!v) { die.classList.add('blank'); die.innerHTML = '<i></i>'.repeat(9); return; }
+  die.classList.remove('blank');
+  die.innerHTML = [...Array(9)].map((_, i) => `<i class="${PIPS[v].includes(i) ? 'on' : ''}"></i>`).join('');
+}
+
+function renderPlayers() {
+  document.getElementById('players').innerHTML = S.players.map((p, i) => {
+    let tags = '';
+    if (p.sampo) tags += ' 🌟';
+    if (p.fragments) tags += ` 🧩${p.fragments > 1 ? '×' + p.fragments : ''}`;
+    if (p.voyage) tags += ' ⛴️';
+    if (p.stuck) tags += p.stuck === 'storm' ? ' 🌊' : ' ❄️';
+    if (p.skip) tags += ` 💤${p.skip}`;
+    if (p.freeFlip) tags += ' ♨️';
+    return `<div class="pchip${i === S.current ? ' current' : ''}"><span class="dot" style="background:${p.color}"></span>` +
+      `${esc(p.name)} <span class="money">${euro(p.money)}</span>${tags}</div>`;
+  }).join('');
+  const chip = document.querySelector('.pchip.current');
+  if (chip) chip.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+}
+
+function btn(act, label, sub, { disabled = false, primary = false, wide = false, arg = '' } = {}) {
+  return `<button data-act="${act}" data-arg="${esc(arg)}" class="${primary ? 'primary' : ''}${wide ? ' wide' : ''}"${disabled || busy ? ' disabled' : ''}>` +
+    `${label}${sub ? `<small>${sub}</small>` : ''}</button>`;
+}
+
+function renderPanel() {
+  const p = cur();
+  document.getElementById('who').innerHTML = `<span class="dot" style="background:${p.color}"></span>${esc(p.name)}`;
+  document.getElementById('turnno').textContent = t('round', { r: S.turn });
+  const here = NODES[p.node];
+  let status = '', acts = '';
+
+  switch (S.phase) {
+    case 'skip':
+      status = p.skipReason === 'sauna' ? t('st_skipSauna') : t('st_skipMosq', { k: p.skip });
+      acts = btn('skip', t('bt_skip'), null, { primary: true, wide: true });
+      break;
+
+    case 'start': {
+      if (p.stuck) {
+        status = t(p.stuck === 'storm' ? 'st_storm' : 'st_blizzard');
+        acts = btn('escape', t('bt_escape'), t('sb_escape'), { primary: true, wide: true });
+        break;
+      }
+      if (p.voyage) {
+        status = t('st_atSea', { dest: p.voyage.route[p.voyage.route.length - 1] });
+        acts = btn('sail', t('bt_sail'), t(p.voyage.free ? 'sb_sailFree' : 'sb_sailRoll'), { primary: true, wide: true });
+        break;
+      }
+      status = t('st_in', { place: nodeName(p.node), isCity: here.kind === 'city' });
+      if (here.kind === 'city' && !hiddenTokenAt(p.node) && S.tokens[p.node]) status += t('st_turned');
+      if (hiddenTokenAt(p.node)) status += t('st_hidden');
+      if (canWin(p)) status += t('st_carry', { sampo: p.sampo });
+      const canRoad = ROAD[p.node].length > 0;
+      acts += btn('walk', t('bt_walk'), t(canRoad ? 'sb_walk' : 'sb_island'), { primary: true, disabled: !canRoad });
+      if (here.harbour) {
+        const broke = p.money < COSTS.ferry;
+        acts += btn('ferry', t('bt_ferry'), broke ? t('sb_ferryBroke') : t('sb_ferry', { cost: COSTS.ferry }));
+      }
+      if (RAIL[p.node].length) acts += btn('train', t('bt_train'), euro(COSTS.train), { disabled: p.money < COSTS.train });
+      if (here.lap) acts += btn('snow', t('bt_snow'), t('sb_snow', { cost: COSTS.snow }), { disabled: p.money < COSTS.snow || !ROAD[p.node].some(n => NODES[n].lap) });
+      if (hiddenTokenAt(p.node)) {
+        acts += btn('luck', t('bt_luck'), t('sb_luck'));
+        if (p.freeFlip) acts += btn('freeflip', t('bt_freeFlip'), t('sb_sauna'));
+        acts += btn('payflip', t('bt_flip'), euro(COSTS.flip), { disabled: p.money < COSTS.flip });
+      }
+      break;
+    }
+
+    case 'move':
+      if (busy) { status = t('st_moving'); break; }
+      status = t('st_move', { snow: S.mode === 'snow', d: S.roll, extra: S.extraMove });
+      acts = Object.keys(S.targets || {}).filter(id => NODES[id].kind === 'city')
+        .map(id => btn('go', esc(cityName(id)), null, { arg: id })).join('');
+      break;
+
+    case 'ferry': {
+      const broke = p.money < COSTS.ferry;
+      status = broke ? t('st_ferryBroke') : t('st_ferry', { cost: COSTS.ferry });
+      acts = ferryRoutesFrom(p.node).map((r, i) =>
+        btn('ferryto', esc(cityName(r[r.length - 1])), t('sb_route', { k: r.length - 1, lake: r.lake }), { arg: i })
+      ).join('') + btn('cancel', t('bt_back'), null, { wide: true });
+      break;
+    }
+
+    case 'train':
+      status = t('st_train', { cost: COSTS.train });
+      acts = RAIL[p.node].map(id => btn('trainto', esc(cityName(id)), null, { arg: id })).join('') + btn('cancel', t('bt_back'), null, { wide: true });
+      break;
+
+    case 'token':
+      status = t('st_token', { city: p.node, gf: here.goldfield, swamp: here.swamp });
+      if (p.freeFlip) acts += btn('freeflip', t('bt_flipFree'), t('sb_sauna'), { primary: true });
+      acts += btn('payflip', t('bt_flipPay', { cost: COSTS.flip }), null, { primary: !p.freeFlip, disabled: p.money < COSTS.flip });
+      acts += btn('leave', t('bt_leave'), t('sb_leave'), { wide: true });
+      break;
+
+    case 'sun':
+      status = t('st_sun');
+      acts = btn('sunmove', t('bt_sun'), t('sb_walk'), { primary: true, wide: true });
+      break;
+
+    case 'reveal':
+      status = '';
+      break;
+
+    case 'won':
+      status = t('st_won', { n: S.players[S.winner].name });
+      acts = btn('newgame', t('newGame'), null, { primary: true, wide: true }) + btn('showwin', t('bt_showWin'), null, { wide: true });
+      break;
+  }
+
+  if (busy && S.phase !== 'move') status = status || '…';
+  document.getElementById('status').textContent = status;
+  document.getElementById('actions').innerHTML = acts;
+  document.getElementById('loglines').innerHTML = S.log.slice(-2).map(logLine).join('');
+}
+
+const logLine = l => `<div>${l.c ? `<b style="color:${l.c}">●</b> ` : ''}${esc(msg(l))}</div>`;
+
+function tokenIcon(type) { return TOKENS[type].icon; }
+
+function renderOverlay() {
+  const ov = document.getElementById('overlay'), card = document.getElementById('card');
+  if (ov.dataset.sticky) return;
+  if (S && S.phase === 'reveal' && S.reveal && !busy) {
+    const r = S.reveal, p = S.players[r.who];
+    // r.effect / r.flavour are message objects; saves from before the language toggle hold plain text
+    const effect = typeof r.effect === 'string' ? r.effect : t(r.effect.k, r.effect.a);
+    const flavour = STR.en[r.flavour] ? t(r.flavour) : r.flavour;
+    const place = NODES[r.city] ? cityName(r.city) : r.city;
+    card.innerHTML = `<div class="reveal">
+      <div style="color:var(--muted);font-size:13px">${esc(t('rv_turns', { n: p.name, place }))}</div>
+      <div class="big">${tokenIcon(r.type)}</div>
+      <h2>${t('tok_' + r.type)}</h2>
+      <p>${esc(flavour)}</p>
+      <p class="effect${r.bad ? ' bad' : ''}">${esc(effect)}</p>
+      <button class="primary" data-act="closereveal">${t('continue')}</button></div>`;
+    ov.classList.remove('hidden');
+    return;
+  }
+  if (S && S.phase === 'won' && !hideWin) {
+    const p = S.players[S.winner];
+    const standings = S.players.map((q, i) => ({ q, i })).sort((a, b) => b.q.money - a.q.money)
+      .map(({ q }) => `<div>${esc(q.name)} — ${euro(q.money)}${q.sampo ? ' 🌟' : ''}${q.fragments ? ' 🧩' : ''}</div>`).join('');
+    card.innerHTML = `<div class="win"><div class="big">🌟</div>
+      <h2 style="color:${p.color}">${esc(t('wn_title', { n: p.name }))}</h2>
+      <p>${esc(t('wn_text', { n: p.name, sampo: p.sampo, city: p.node, r: S.turn }))}</p>
+      <div class="log-list" style="margin:12px 0;text-align:left">${standings}</div>
+      <button class="primary" style="width:100%" data-act="newgame">${t('newGame')}</button>
+      <button class="ghost" style="width:100%;margin-top:8px" data-act="closeov">${t('wn_board')}</button></div>`;
+    ov.classList.remove('hidden');
+    return;
+  }
+  ov.classList.add('hidden');
+}
+
+function showSheet(html) {
+  const ov = document.getElementById('overlay');
+  ov.dataset.sticky = '1';
+  document.getElementById('card').innerHTML = html + `<div class="close-row"><button class="primary" data-act="closeov">${t('close')}</button></div>`;
+  ov.classList.remove('hidden');
+}
+
+function showLog() {
+  showSheet(`<h2>${t('logTitle')}</h2><div class="log-list">${S.log.slice().reverse().map(logLine).join('')}</div>`);
+}
+
+function rulesHtml() {
+  const e = euro;
+  const tokIcon = k => k === 'berries' ? '🟠' : TOKENS[k].icon;
+  const fi = lang === 'fi';
+  const eff = lang === 'sv'
+    ? { gold: '+' + e(1000), silver: '+' + e(600), berries: '+' + e(300), empty: 'Ingenting', louhi: 'Förlora alla pengar', hiisi: 'Förlora hälften av dina pengar',
+        fragment: 'Kasseras innan Sampo har hittats; en vinstbricka efteråt', sampo: 'För hem och vinn' }
+    : fi
+    ? { gold: '+' + e(1000), silver: '+' + e(600), berries: '+' + e(300), empty: 'Ei mitään', louhi: 'Menetät kaikki rahasi', hiisi: 'Menetät puolet rahoistasi',
+        fragment: 'Arvoton ennen kuin Sampo löytyy, sen jälkeen voittomerkki', sampo: 'Vie kotiin ja voitat' }
+    : { gold: '+' + e(1000), silver: '+' + e(600), berries: '+' + e(300), empty: 'Nothing', louhi: 'Lose all money', hiisi: 'Lose half your money',
+        fragment: 'Discarded before the Sampo is found; a winning token after', sampo: 'Carry home to win' };
+  const tokRows = Object.keys(TOKENS).map(k => `<tr><td>${tokIcon(k)} ${t('tok_' + k)}</td><td>${eff[k]} <span style="color:var(--muted)">(×${TOKENS[k].n})</span></td></tr>`).join('');
+  if (lang === 'sv') return `<div class="rules"><h2>Så spelar du</h2>
+    <p>Tävla genom Finland för att hitta <b>Sampo</b> och föra det tillbaka till <b>Helsingfors</b> eller <b>Rovaniemi</b>. Alla börjar med ${e(START_MONEY)}.</p>
+    <h3>Resor</h3><table>
+      <tr><td>🥾 Väg</td><td>Gratis. Slå och flytta exakt så många steg, eller stanna tidigare i en stad. Ingen vändning bakåt.</td></tr>
+      <tr><td>⛴️ Färja</td><td>${e(COSTS.ferry)} för att gå ombord i en hamn. Slå för avstånd; du stannar i första hamnen. Panka spelare seglar 2 steg gratis. Öarna nås bara med färja.</td></tr>
+      <tr><td>🚆 Tåg</td><td>${e(COSTS.train)}. Direkt mellan två sammanlänkade stationer.</td></tr>
+      <tr><td>🛷 Snöskoter</td><td>${e(COSTS.snow)}. Bara i Lappland (norr om den streckade linjen). Slå och dubbla resultatet.</td></tr></table>
+    <h3>Brickor</h3><p>I en stad med en dold bricka (?) väljer du: betala ${e(COSTS.flip)} och vänd den, eller res vidare. Om du stannar kan du på en senare tur slå 4–6 och vända den gratis.</p>
+    <table>${tokRows}</table>
+    <h3>Specialrutor</h3><table>
+      <tr><td>❄️ Snöstorm</td><td>Du sitter fast tills du slår 1 eller 2.</td></tr>
+      <tr><td>🦟 Sodankylä</td><td>Myggträsk: en tom bricka här kostar 3 turer.</td></tr>
+      <tr><td>✨ Enare</td><td>Lemmenjokis guldfält: skatter som hittas här är värda dubbelt.</td></tr>
+      <tr><td>🎅 Korvatunturi</td><td>Den som kommer först får +${e(500)} av julgubben.</td></tr>
+      <tr><td>🌊 Östersjöstorm</td><td>Du sitter fast tills du slår 1 eller 2.</td></tr>
+      <tr><td>♨️ Bastu</td><td>Stå över en tur och vänd sedan en bricka gratis.</td></tr>
+      <tr><td>☀️ Midnattssol</td><td>Ta ett extra drag direkt.</td></tr>
+      <tr><td>🦌 Renar på vägen</td><td>Din förflyttning slutar här.</td></tr></table>
+    <h3>Vinst</h3><p>Den som först når Helsingfors eller Rovaniemi med Sampo — eller med ett Sampofragment efter att Sampo har hittats — vinner.</p></div>`;
+  if (fi) return `<div class="rules"><h2>Näin pelaat</h2>
+    <p>Kilpaile halki Suomen, etsi <b>Sampo</b> ja vie se takaisin <b>Helsinkiin</b> tai <b>Rovaniemelle</b>. Jokainen aloittaa ${e(START_MONEY)} rahalla.</p>
+    <h3>Matkustaminen</h3><table>
+      <tr><td>🥾 Tie</td><td>Ilmainen. Heitä noppaa ja liiku täsmälleen niin monta askelta, tai pysähdy aiemmin kaupunkiin. Takaisin ei saa kääntyä.</td></tr>
+      <tr><td>⛴️ Lautta</td><td>${e(COSTS.ferry)} satamassa. Heitä matka; pysähdyt ensimmäiseen satamaan. Rahaton pelaaja purjehtii 2 askelta ilmaiseksi. Saarille pääsee vain lautalla.</td></tr>
+      <tr><td>🚆 Juna</td><td>${e(COSTS.train)}. Suoraan kahden yhdistetyn aseman välillä.</td></tr>
+      <tr><td>🛷 Moottorikelkka</td><td>${e(COSTS.snow)}. Vain Lapissa (katkoviivan pohjoispuolella). Heitä ja tuplaa tulos.</td></tr></table>
+    <h3>Merkit</h3><p>Kun saavut kaupunkiin, jossa on piilotettu merkki (?), valitse: maksa ${e(COSTS.flip)} ja käännä se, tai jatka matkaa. Jos jäät kaupunkiin, voit myöhemmällä vuorolla heittää 4–6 ja kääntää merkin ilmaiseksi.</p>
+    <table>${tokRows}</table>
+    <h3>Erikoisruudut</h3><table>
+      <tr><td>❄️ Lumimyrsky</td><td>Jumissa, kunnes heität 1 tai 2.</td></tr>
+      <tr><td>🦟 Sodankylä</td><td>Hyttyssuo: tyhjä merkki täällä maksaa 3 vuoroa.</td></tr>
+      <tr><td>✨ Inari</td><td>Lemmenjoen kultamaat: täältä löytyvä aarre on tuplasti arvokas.</td></tr>
+      <tr><td>🎅 Korvatunturi</td><td>Ensimmäinen perille ehtinyt saa joulupukilta +${e(500)}.</td></tr>
+      <tr><td>🌊 Itämeren myrsky</td><td>Jumissa, kunnes heität 1 tai 2.</td></tr>
+      <tr><td>♨️ Sauna</td><td>Yksi vuoro väliin, sitten yksi ilmainen merkin kääntö.</td></tr>
+      <tr><td>☀️ Yötön yö</td><td>Saat heti lisäsiirron.</td></tr>
+      <tr><td>🦌 Poroja tiellä</td><td>Siirtosi päättyy tähän.</td></tr></table>
+    <h3>Voittaminen</h3><p>Ensimmäinen, joka saapuu Helsinkiin tai Rovaniemelle Sammon kanssa — tai Sammon sirpaleen kanssa sen jälkeen, kun Sampo on löytynyt — voittaa.</p></div>`;
+  return `<div class="rules"><h2>How to play</h2>
+    <p>Race across Finland to find the <b>Sampo</b> and carry it back to <b>Helsinki</b> or <b>Rovaniemi</b>. Everyone starts with ${e(START_MONEY)}.</p>
+    <h3>Travel</h3><table>
+      <tr><td>🥾 Road</td><td>Free. Roll and move exactly that many steps, or stop early at a city. No doubling back.</td></tr>
+      <tr><td>⛴️ Ferry</td><td>${e(COSTS.ferry)} to board at a harbour. Roll for distance; you stop at the first harbour. Broke players sail 2 steps free. Islands are ferry-only.</td></tr>
+      <tr><td>🚆 Train</td><td>${e(COSTS.train)}. Jump directly between two linked stations.</td></tr>
+      <tr><td>🛷 Snowmobile</td><td>${e(COSTS.snow)}. Lapland only (north of the dotted line). Roll and double it.</td></tr></table>
+    <h3>Tokens</h3><p>At a city with a hidden token (?), choose: pay ${e(COSTS.flip)} to flip it, or carry on. If you stay, on a later turn you can roll 4–6 to flip it free.</p>
+    <table>${tokRows}</table>
+    <h3>Special spaces</h3><table>
+      <tr><td>❄️ Blizzard</td><td>Stuck until you roll 1 or 2.</td></tr>
+      <tr><td>🦟 Sodankylä</td><td>Mosquito swamp: an empty token here costs 3 turns.</td></tr>
+      <tr><td>✨ Inari</td><td>Lemmenjoki gold fields: treasure found here is worth double.</td></tr>
+      <tr><td>🎅 Korvatunturi</td><td>First to arrive gets +${e(500)} from Santa.</td></tr>
+      <tr><td>🌊 Baltic storm</td><td>Stuck until you roll 1 or 2.</td></tr>
+      <tr><td>♨️ Sauna</td><td>Skip a turn, then flip a token for free.</td></tr>
+      <tr><td>☀️ Midnight sun</td><td>Take an extra move right away.</td></tr>
+      <tr><td>🦌 Reindeer</td><td>Your move ends here.</td></tr></table>
+    <h3>Winning</h3><p>First to reach Helsinki or Rovaniemi carrying the Sampo — or a Sampo fragment once the Sampo has been found — wins.</p></div>`;
+}
+
+function showRules() { showSheet(rulesHtml()); }
+
+function render() {
+  if (!S) return;
+  renderPlayers();
+  renderMapDynamic();
+  renderPanel();
+  renderOverlay();
+}
+
+/* =====================================================================
+   Events
+   ===================================================================== */
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-act]');
+  if (!b || b.disabled) return;
+  const act = b.dataset.act, arg = b.dataset.arg;
+  if (act === 'closeov') {
+    const ov = document.getElementById('overlay');
+    delete ov.dataset.sticky; ov.classList.add('hidden');
+    if (S && S.phase === 'won') hideWin = true;
+    else if (S) renderOverlay();
+    return;
+  }
+  if (act === 'showwin') { hideWin = false; renderOverlay(); return; }
+  if (act === 'newgame') { showSetup(); return; }
+  if (busy) return;
+  switch (act) {
+    case 'walk': actWalk('road'); break;
+    case 'snow': actWalk('snow'); break;
+    case 'ferry': actFerry(); break;
+    case 'ferryto': chooseFerry(+arg); break;
+    case 'sail': actSailOn(); break;
+    case 'escape': actEscape(); break;
+    case 'train': actTrain(); break;
+    case 'trainto': chooseTrain(arg); break;
+    case 'luck': actTryLuck(); break;
+    case 'payflip': actPayFlip(false); break;
+    case 'freeflip': actPayFlip(true); break;
+    case 'leave': actLeave(); break;
+    case 'skip': actSkip(); break;
+    case 'sunmove': actSunMove(); break;
+    case 'go': chooseTarget(arg); break;
+    case 'cancel': S.phase = 'start'; save(); render(); break;
+    case 'closereveal': closeReveal(); break;
+  }
+});
+
+svg.addEventListener('click', e => {
+  const hit = e.target.closest('[data-node]');
+  if (!hit || busy || !S) return;
+  const id = hit.dataset.node;
+  if (S.phase === 'move') chooseTarget(id);
+  else if (S.phase === 'train') chooseTrain(id);
+  else if (S.phase === 'ferry') {
+    const i = ferryRoutesFrom(cur().node).findIndex(r => r[r.length - 1] === id);
+    if (i >= 0) chooseFerry(i);
+  }
+});
+
+document.getElementById('loglines').addEventListener('click', showLog);
+document.getElementById('rulesbtn').addEventListener('click', showRules);
+document.getElementById('rulesbtn2').addEventListener('click', showRules);
+document.getElementById('zoombtn').addEventListener('click', () => {
+  zoomed = !zoomed;
+  document.getElementById('mapwrap').classList.toggle('zoom', zoomed);
+  requestAnimationFrame(() => scrollToPawn('auto'));
+});
+document.getElementById('menubtn').addEventListener('click', () => {
+  showSheet(`<h2>${t('ng_q')}</h2><p>${t('ng_text')}</p>
+    <button class="primary" style="width:100%;margin-top:8px" data-act="newgame">${t('ng_go')}</button>`);
+});
+document.getElementById('langbtn').addEventListener('click', () => setLang(LANGS[(LANGS.indexOf(lang) + 1) % LANGS.length]));
+document.getElementById('langseg').addEventListener('click', e => { const b = e.target.closest('[data-lang]'); if (b) setLang(b.dataset.lang); });
+
+// Static labels in the HTML carry data-i18n (text) or data-i18n-title (title + aria-label).
+function applyStaticText() {
+  document.documentElement.lang = lang;
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
+  document.querySelectorAll('[data-i18n-title]').forEach(el => {
+    el.title = t(el.dataset.i18nTitle); el.setAttribute('aria-label', el.title);
+  });
+  // Header button shows the current language and cycles EN → FI → SV
+  document.getElementById('langbtn').textContent = lang.toUpperCase();
+  document.querySelectorAll('#langseg [data-lang]').forEach(b => {
+    b.classList.toggle('on', b.dataset.lang === lang);
+    b.setAttribute('aria-pressed', b.dataset.lang === lang);
+  });
+}
+
+function setLang(l) {
+  lang = l;
+  try { localStorage.setItem(LANG_KEY, l); } catch (e) { /* storage unavailable */ }
+  applyStaticText();
+  buildMap();
+  if (!document.getElementById('setup').classList.contains('hidden')) renderSetup();
+  if (S) render();
+}
+
+/* =====================================================================
+   Setup screen
+   ===================================================================== */
+let setup = {
+  players: [
+    { name: 'Väinämöinen', color: COLORS[0], start: 'hel' },
+    { name: 'Ilmarinen', color: COLORS[1], start: 'rov' },
+  ],
+  first: 'random',
+};
+const DEFAULT_NAMES = ['Väinämöinen', 'Ilmarinen', 'Lemminkäinen', 'Aino', 'Kullervo', 'Joukahainen'];
+
+function renderSetup() {
+  document.getElementById('pcount').textContent = setup.players.length;
+  document.getElementById('pminus').disabled = setup.players.length <= 2;
+  document.getElementById('pplus').disabled = setup.players.length >= 6;
+  document.getElementById('prows').innerHTML = setup.players.map((p, i) => `
+    <div class="prow">
+      <button class="swatch" data-sw="${i}" style="background:${p.color}" aria-label="${t('changeColour')}"></button>
+      <input id="pname${i}" data-name="${i}" value="${esc(p.name)}" maxlength="16" aria-label="${esc(t('playerN', { i: i + 1 }))}">
+      <div class="startsel">
+        <button data-start="${i}" data-city="hel" class="${p.start === 'hel' ? 'on' : ''}">${esc(cityName('hel'))}</button>
+        <button data-start="${i}" data-city="rov" class="${p.start === 'rov' ? 'on' : ''}">${esc(cityName('rov'))}</button>
+      </div>
+    </div>`).join('');
+  const sel = document.getElementById('firstsel');
+  sel.innerHTML = `<option value="random">${t('random')}</option>` +
+    setup.players.map((p, i) => `<option value="${i}">${esc(p.name || t('playerN', { i: i + 1 }))}</option>`).join('');
+  sel.value = setup.first === 'random' || +setup.first < setup.players.length ? String(setup.first) : 'random';
+}
+
+document.getElementById('pplus').addEventListener('click', () => {
+  if (setup.players.length >= 6) return;
+  const used = setup.players.map(p => p.color);
+  const i = setup.players.length;
+  setup.players.push({ name: DEFAULT_NAMES[i], color: COLORS.find(c => !used.includes(c)), start: i % 2 ? 'rov' : 'hel' });
+  renderSetup();
+});
+document.getElementById('pminus').addEventListener('click', () => {
+  if (setup.players.length > 2) setup.players.pop();
+  renderSetup();
+});
+document.getElementById('prows').addEventListener('click', e => {
+  const sw = e.target.closest('[data-sw]');
+  if (sw) {
+    const p = setup.players[+sw.dataset.sw];
+    const used = setup.players.filter(q => q !== p).map(q => q.color);
+    let k = COLORS.indexOf(p.color);
+    do { k = (k + 1) % COLORS.length; } while (used.includes(COLORS[k]));
+    p.color = COLORS[k];
+    renderSetup();
+  }
+  const st = e.target.closest('[data-start]');
+  if (st) { setup.players[+st.dataset.start].start = st.dataset.city; renderSetup(); }
+});
+document.getElementById('prows').addEventListener('input', e => {
+  const i = e.target.dataset.name;
+  if (i != null) {
+    setup.players[+i].name = e.target.value;
+    const opt = document.querySelector(`#firstsel option[value="${i}"]`);
+    if (opt) opt.textContent = e.target.value || t('playerN', { i: +i + 1 });
+  }
+});
+document.getElementById('firstsel').addEventListener('change', e => { setup.first = e.target.value; });
+document.getElementById('startbtn').addEventListener('click', () => {
+  const players = setup.players.map((p, i) => ({ ...p, name: p.name.trim() || t('playerN', { i: i + 1 }) }));
+  const first = setup.first === 'random' ? Math.floor(Math.random() * players.length) : +setup.first;
+  showGame();
+  newGame({ players, first });
+});
+document.getElementById('backbtn').addEventListener('click', showGame);
+
+function showSetup() {
+  const ov = document.getElementById('overlay');
+  delete ov.dataset.sticky; ov.classList.add('hidden');
+  document.getElementById('game').classList.add('hidden');
+  document.getElementById('setup').classList.remove('hidden');
+  document.getElementById('backbtn').classList.toggle('hidden', !(S && S.phase !== 'won'));
+  renderSetup();
+}
+
+function showGame() {
+  document.getElementById('setup').classList.add('hidden');
+  document.getElementById('game').classList.remove('hidden');
+  if (S) { render(); drawDie(S.lastRoll); requestAnimationFrame(() => scrollToPawn('auto')); }
+}
+
+/* =====================================================================
+   Boot
+   ===================================================================== */
+applyStaticText();
+buildMap();
+drawDie(null);
+(function boot() {
+  const saved = loadSaved();
+  if (saved && saved.v === 1 && saved.players && saved.phase !== 'won') {
+    S = saved;
+    showGame();
+    // Finish a roll or move that was interrupted mid-animation.
+    if (S.pendingMove) finishMove();
+    else if (S.pendingRoll) { drawDie(S.pendingRoll.v); finishRoll(); }
+    else if (S.phase === 'move' && !S.targets) { S.phase = 'start'; render(); }
+  } else {
+    showSetup();
+  }
+})();
+
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
