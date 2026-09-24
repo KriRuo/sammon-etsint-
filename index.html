@@ -716,6 +716,7 @@ let S = null;          // saved game state
 let busy = false;      // animation in progress (not saved)
 let zoomed = false;
 let hideWin = false;   // winner card dismissed to look at the board
+let gen = 0;           // bumped by newGame so stale timers from the previous game stop
 const FAST = /[?&]fast\b/.test(location.search);   // test hook: skip animations
 
 function save() {
@@ -736,6 +737,10 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;'
 
 function newGame(setup) {
   hideWin = false;
+  gen++;
+  busy = false;
+  document.getElementById('die').classList.remove('rolling');
+  drawDie(null);
   const pool = [];
   for (const [type, def] of Object.entries(TOKENS)) for (let i = 0; i < def.n; i++) pool.push(type);
   shuffle(pool);
@@ -824,37 +829,50 @@ function endTurn() {
   startTurn();
 }
 
-function rollDie(cb) {
+// Every die roll and pawn move is committed to the save before it animates
+// (S.pendingRoll / S.pendingMove), so a reload mid-animation finishes the
+// action instead of undoing a fare or a route choice. `gen` changes when a new
+// game replaces S, which stops any timers still running for the old game.
+const ROLL_THEN = {
+  walk:   v => { log('lg_rolls', { n: cur().name, v }); beginMove(v, false); },
+  snow:   v => { log('lg_snow', { n: cur().name, cost: COSTS.snow, v, d: v * 2 }); beginMove(v * 2, true); },
+  sun:    v => { log('lg_rolls', { n: cur().name, v }); beginMove(v, false, true); },
+  ferry:  v => { log('lg_rolls', { n: cur().name, v }); sail(v); },
+  sail:   v => { log('lg_rollsSea', { n: cur().name, v }); sail(v); },
+  escape: v => escapeRolled(v),
+  luck:   v => luckRolled(v),
+};
+
+function rollDie(kind) {
+  const v = d6();
+  S.pendingRoll = { kind, v };
+  save();
   busy = true;
   render();
+  const g = gen;
   const die = document.getElementById('die');
   die.classList.remove('blank');
   die.classList.add('rolling');
   let n = 0;
-  const iv = setInterval(() => { drawDie(d6()); if (++n > 7 || FAST) done(); }, FAST ? 0 : 60);
-  function done() {
-    clearInterval(iv);
-    const v = d6();
-    die.classList.remove('rolling');
-    drawDie(v);
-    busy = false;
-    S.lastRoll = v;
-    cb(v);
-  }
+  const iv = setInterval(() => {
+    if (g !== gen) return clearInterval(iv);
+    drawDie(d6());
+    if (++n > 7 || FAST) { clearInterval(iv); die.classList.remove('rolling'); drawDie(v); busy = false; finishRoll(); }
+  }, FAST ? 0 : 60);
+}
+
+function finishRoll() {
+  const { kind, v } = S.pendingRoll;
+  delete S.pendingRoll;
+  S.lastRoll = v;
+  ROLL_THEN[kind](v);
 }
 
 // --- Actions -----------------------------------------------------------
 
 function actWalk(mode) {
-  const p = cur();
-  const lap = mode === 'snow';
-  if (lap) { p.money -= COSTS.snow; }
-  rollDie(v => {
-    const d = lap ? v * 2 : v;
-    if (lap) log('lg_snow', { n: p.name, cost: COSTS.snow, v, d });
-    else log('lg_rolls', { n: p.name, v });
-    beginMove(d, lap);
-  });
+  if (mode === 'snow') cur().money -= COSTS.snow;
+  rollDie(mode === 'snow' ? 'snow' : 'walk');
 }
 
 function beginMove(d, lapOnly, extra) {
@@ -876,7 +894,7 @@ function chooseTarget(id) {
   if (busy || S.phase !== 'move' || !S.targets[id]) return;
   const path = S.targets[id];
   S.targets = null;
-  animatePath(path, () => land(id));
+  animatePath(path, { kind: 'land' });
 }
 
 function actFerry() {
@@ -897,52 +915,53 @@ function chooseFerry(i) {
   } else {
     p.money -= COSTS.ferry;
     log('lg_ferry', { n: p.name, dest, cost: COSTS.ferry });
-    rollDie(v => { log('lg_rolls', { n: p.name, v }); sail(v); });
+    rollDie('ferry');
   }
 }
 
 function actSailOn() {
   const p = cur();
   if (p.voyage.free) { log('lg_drift', { n: p.name }); sail(2); }
-  else rollDie(v => { log('lg_rollsSea', { n: p.name, v }); sail(v); });
+  else rollDie('sail');
 }
 
 function sail(n) {
-  const p = cur();
-  const v = p.voyage, last = v.route.length - 1;
-  const to = Math.min(v.i + n, last);
+  const v = cur().voyage;
+  const to = Math.min(v.i + n, v.route.length - 1);
   const path = v.route.slice(v.i, to + 1);
   v.i = to;
-  animatePath(path, () => {
-    const id = v.route[to];
-    if (to === last) {
-      p.voyage = null;
-      log('lg_docks', { n: p.name, city: id });
-      return land(id);
-    }
-    p.node = id;
-    if (NODES[id].special === 'storm') {
-      p.stuck = 'storm';
-      log('lg_storm', { n: p.name });
-    }
-    endTurn();
-  });
+  animatePath(path, { kind: 'sail' });
 }
 
-function actEscape() {
+function sailArrived() {
   const p = cur();
-  rollDie(v => {
-    const storm = p.stuck === 'storm';
-    if (v <= 2) {
-      p.stuck = null;
-      log('lg_escape', { n: p.name, v, storm });
-      if (storm && p.voyage) sail(v);
-      else beginMove(v, false);
-    } else {
-      log('lg_stuck', { n: p.name, v, storm });
-      endTurn();
-    }
-  });
+  const v = p.voyage, id = v.route[v.i];
+  if (v.i === v.route.length - 1) {
+    p.voyage = null;
+    log('lg_docks', { n: p.name, city: id });
+    return land(id);
+  }
+  if (NODES[id].special === 'storm') {
+    p.stuck = 'storm';
+    log('lg_storm', { n: p.name });
+  }
+  endTurn();
+}
+
+function actEscape() { rollDie('escape'); }
+
+function escapeRolled(v) {
+  const p = cur();
+  const storm = p.stuck === 'storm';
+  if (v <= 2) {
+    p.stuck = null;
+    log('lg_escape', { n: p.name, v, storm });
+    if (storm && p.voyage) sail(v);
+    else beginMove(v, false);
+  } else {
+    log('lg_stuck', { n: p.name, v, storm });
+    endTurn();
+  }
 }
 
 function actTrain() {
@@ -955,15 +974,15 @@ function chooseTrain(dest) {
   if (!RAIL[p.node].includes(dest) || p.money < COSTS.train) return;
   p.money -= COSTS.train;
   log('lg_train', { n: p.name, city: dest, cost: COSTS.train });
-  animatePath([p.node, dest], () => land(dest));
+  animatePath([p.node, dest], { kind: 'land' });
 }
 
-function actTryLuck() {
+function actTryLuck() { rollDie('luck'); }
+
+function luckRolled(v) {
   const p = cur();
-  rollDie(v => {
-    if (v >= 4) { log('lg_luckYes', { n: p.name, v }); reveal(p.node); }
-    else { log('lg_luckNo', { n: p.name, v }); endTurn(); }
-  });
+  if (v >= 4) { log('lg_luckYes', { n: p.name, v }); reveal(p.node); }
+  else { log('lg_luckNo', { n: p.name, v }); endTurn(); }
 }
 
 function actPayFlip(free) {
@@ -978,10 +997,7 @@ function actLeave() {
   endTurn();
 }
 
-function actSunMove() {
-  const p = cur();
-  rollDie(v => { log('lg_rolls', { n: p.name, v }); beginMove(v, false, true); });
-}
+function actSunMove() { rollDie('sun'); }
 
 function actSkip() {
   const p = cur();
@@ -1230,18 +1246,30 @@ function renderPawns() {
   if (active && g.lastElementChild !== active) g.appendChild(active);
 }
 
-function animatePath(path, done) {
+function animatePath(path, then) {
+  const p = cur();
+  S.pendingMove = { ...then, to: path[path.length - 1] };
+  save();
   busy = true;
   render();
-  const p = cur();
+  const g = gen;
   let k = 1;
   const step = () => {
-    if (k >= path.length) { busy = false; return done(); }
+    if (g !== gen) return;
+    if (k >= path.length) { busy = false; return finishMove(); }
     p.node = path[k++];
     renderPawns();
     setTimeout(step, FAST ? 0 : 190);
   };
   step();
+}
+
+function finishMove() {
+  const m = S.pendingMove;
+  delete S.pendingMove;
+  cur().node = m.to;
+  if (m.kind === 'sail') sailArrived();
+  else land(m.to);
 }
 
 function scrollToPawn(behavior = 'smooth') {
@@ -1692,9 +1720,11 @@ drawDie(null);
   const saved = loadSaved();
   if (saved && saved.v === 1 && saved.players && saved.phase !== 'won') {
     S = saved;
-    // A move interrupted mid-animation resumes from the last saved phase.
-    if (S.phase === 'move' && !S.targets) S.phase = 'start';
     showGame();
+    // Finish a roll or move that was interrupted mid-animation.
+    if (S.pendingMove) finishMove();
+    else if (S.pendingRoll) { drawDie(S.pendingRoll.v); finishRoll(); }
+    else if (S.phase === 'move' && !S.targets) { S.phase = 'start'; render(); }
   } else {
     showSetup();
   }
